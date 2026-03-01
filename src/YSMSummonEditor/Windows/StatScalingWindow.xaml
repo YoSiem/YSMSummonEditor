@@ -69,7 +69,7 @@
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Stat" Binding="{Binding StatName}" IsReadOnly="True" Width="*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
                         <DataGridTextColumn Header="Base Value" Binding="{Binding CurrentValue, UpdateSourceTrigger=PropertyChanged}" Width="*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
-                        <DataGridCheckBoxColumn Header="Dirty" Binding="{Binding IsDirty}" IsReadOnly="True" Width="72" />
+                        <DataGridCheckBoxColumn Header="Dirty" Binding="{Binding IsDirty, Mode=OneWay}" IsReadOnly="True" Width="72" />
                     </DataGrid.Columns>
                 </DataGrid>
             </GroupBox>
@@ -94,7 +94,7 @@
                         <DataGridTextColumn Header="INT" Binding="{Binding Int, StringFormat=F4, UpdateSourceTrigger=PropertyChanged}" Width="70" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
                         <DataGridTextColumn Header="MEN" Binding="{Binding Men, StringFormat=F4, UpdateSourceTrigger=PropertyChanged}" Width="70" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
                         <DataGridTextColumn Header="LUK" Binding="{Binding Luk, StringFormat=F4, UpdateSourceTrigger=PropertyChanged}" Width="70" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
-                        <DataGridCheckBoxColumn Header="Dirty" Binding="{Binding IsDirty}" IsReadOnly="True" Width="62" />
+                        <DataGridCheckBoxColumn Header="Dirty" Binding="{Binding IsDirty, Mode=OneWay}" IsReadOnly="True" Width="62" />
                     </DataGrid.Columns>
                 </DataGrid>
             </GroupBox>
