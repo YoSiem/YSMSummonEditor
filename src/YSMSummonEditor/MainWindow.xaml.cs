@@ -52,8 +52,10 @@ public partial class MainWindow : Window
     private readonly List<PendingFieldChange> _pendingFieldChanges = [];
     private readonly Dictionary<int, StatResourceContext> _pendingStatContexts = new();
     private readonly Dictionary<int, CreatureLevelBonusUpsert> _pendingCreatureLevelBonusUpdates = new();
+    private readonly Dictionary<int, RandomSkillGroupUpsert> _pendingRandomSkillGroupUpdates = new();
     private readonly List<PendingFieldChange> _pendingScalingFieldChanges = [];
     private readonly Dictionary<int, SkillDisplaySnapshot> _skillDisplay = new();
+    private readonly Dictionary<int, RandomSkillGroupEditModel> _randomSkillGroups = new();
 
     private SummonEditorSettings _settings = new();
     private ISummonEditorRepository? _repository;
@@ -326,6 +328,7 @@ public partial class MainWindow : Window
             TxtStatus.Text = "Loading evolution chain...";
             _stageStates.Clear();
             _skillDisplay.Clear();
+            _randomSkillGroups.Clear();
 
             var final = await ResolveFinalEvolutionAsync(selected);
             var sameCard = await _repository.GetSummonsByCardIdAsync(final.CardId);
@@ -336,7 +339,9 @@ public partial class MainWindow : Window
             await BuildStageStateAsync(3, _currentChain.Stage3);
 
             await PopulateSkillDisplayAsync();
+            await LoadRandomSkillGroupsForVisibleRowsAsync();
             BuildEffectiveStageRows();
+            ApplyRandomGroupDisplayToRows();
             BindStageTabs();
             UpdateHeader(final);
             UpdateStatsButtonState();
@@ -457,6 +462,251 @@ public partial class MainWindow : Window
                 row.SkillIcon = _fallbackIcon36;
             }
         }
+    }
+
+    private async Task EnsureSkillDisplayAsync(IReadOnlyCollection<int> skillIds)
+    {
+        if (_repository is null || skillIds.Count == 0)
+        {
+            return;
+        }
+
+        var missing = skillIds
+            .Where(x => x > 0 && !_skillDisplay.ContainsKey(x))
+            .Distinct()
+            .ToArray();
+        if (missing.Length == 0)
+        {
+            return;
+        }
+
+        var fetched = await _repository.GetSkillDisplayAsync(missing);
+        foreach (var pair in fetched)
+        {
+            _skillDisplay[pair.Key] = pair.Value;
+        }
+    }
+
+    private async Task LoadRandomSkillGroupsForVisibleRowsAsync()
+    {
+        if (_repository is null)
+        {
+            return;
+        }
+
+        var groupIds = _stageStates
+            .SelectMany(x => x.Trees)
+            .SelectMany(x => x.CurrentEntries)
+            .Select(x => x.SkillGroupId)
+            .Where(x => x > 0)
+            .Distinct()
+            .ToArray();
+
+        if (groupIds.Length == 0)
+        {
+            return;
+        }
+
+        var toLoad = groupIds
+            .Where(id => !_pendingRandomSkillGroupUpdates.ContainsKey(id) && !_randomSkillGroups.ContainsKey(id))
+            .ToArray();
+
+        if (toLoad.Length > 0)
+        {
+            var loaded = await _repository.GetRandomSkillGroupsAsync(toLoad);
+            foreach (var pair in loaded)
+            {
+                _randomSkillGroups[pair.Key] = ToEditModel(pair.Value);
+            }
+        }
+
+        foreach (var groupId in groupIds)
+        {
+            if (!_pendingRandomSkillGroupUpdates.ContainsKey(groupId) && !_randomSkillGroups.ContainsKey(groupId))
+            {
+                _randomSkillGroups[groupId] = RandomSkillGroupEditModel.Empty(groupId);
+            }
+        }
+
+        var candidateSkillIds = groupIds
+            .Select(GetOverlayRandomGroup)
+            .Where(x => x is not null)
+            .SelectMany(x => x!.SkillIds)
+            .Where(x => x > 0)
+            .Distinct()
+            .ToArray();
+
+        await EnsureSkillDisplayAsync(candidateSkillIds);
+    }
+
+    private RandomSkillGroupEditModel? GetOverlayRandomGroup(int groupId)
+    {
+        if (groupId <= 0)
+        {
+            return null;
+        }
+
+        if (_pendingRandomSkillGroupUpdates.TryGetValue(groupId, out var pending))
+        {
+            return ToEditModel(pending);
+        }
+
+        return _randomSkillGroups.GetValueOrDefault(groupId);
+    }
+
+    private void ApplyRandomGroupDisplayToRows()
+    {
+        foreach (var row in _stageStates.SelectMany(x => x.Trees).SelectMany(x => x.CurrentEntries))
+        {
+            var groupId = row.SkillGroupId;
+            if (groupId <= 0)
+            {
+                row.RandomGroupId = 0;
+                row.IsRandomGroup = false;
+                row.RandomGroupBadge = string.Empty;
+                row.RandomGroupTooltip = string.Empty;
+                row.RandomGroupState = string.Empty;
+                continue;
+            }
+
+            var group = GetOverlayRandomGroup(groupId);
+            row.RandomGroupId = groupId;
+            row.IsRandomGroup = true;
+            row.RandomGroupBadge = $"RND[{groupId}]";
+            row.RandomGroupTooltip = BuildRandomGroupTooltip(groupId, group);
+            row.RandomGroupState = ResolveRandomGroupState(groupId);
+        }
+
+        ApplyRandomGroupDisplayToEffectiveRows(_effectiveEvo1Rows);
+        ApplyRandomGroupDisplayToEffectiveRows(_effectiveEvo2Rows);
+        ApplyRandomGroupDisplayToEffectiveRows(_effectiveEvo3Rows);
+    }
+
+    private void ApplyRandomGroupDisplayToEffectiveRows(IEnumerable<EffectiveStageSkillRow> rows)
+    {
+        foreach (var row in rows)
+        {
+            var groupIds = row.LinkedEntries
+                .Select(x => x.SkillGroupId)
+                .Where(x => x > 0)
+                .Distinct()
+                .OrderBy(x => x)
+                .ToArray();
+
+            if (groupIds.Length == 0)
+            {
+                row.IsRandomGroup = false;
+                row.RandomGroupBadge = string.Empty;
+                row.RandomGroupTooltip = string.Empty;
+                continue;
+            }
+
+            row.IsRandomGroup = true;
+            row.RandomGroupBadge = groupIds.Length == 1
+                ? $"RND[{groupIds[0]}]"
+                : $"RND[{string.Join(",", groupIds.Select(x => x.ToString(CultureInfo.InvariantCulture)))}]";
+
+            var tooltipParts = groupIds
+                .Select(x => BuildRandomGroupTooltip(x, GetOverlayRandomGroup(x)))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            row.RandomGroupTooltip = string.Join("\n\n", tooltipParts);
+        }
+    }
+
+    private string ResolveRandomGroupState(int groupId)
+    {
+        if (_pendingRandomSkillGroupUpdates.ContainsKey(groupId))
+        {
+            return "Pending";
+        }
+
+        return _randomSkillGroups.ContainsKey(groupId)
+            ? "Loaded"
+            : "Missing";
+    }
+
+    private string BuildRandomGroupTooltip(int groupId, RandomSkillGroupEditModel? group)
+    {
+        if (group is null)
+        {
+            return $"Random group {groupId}\nStatus: missing";
+        }
+
+        var builder = new StringBuilder();
+        builder.AppendLine($"Random group: {groupId}");
+        builder.AppendLine($"UseCode: {group.UseCode}");
+
+        if (group.SkillIds.Count == 0)
+        {
+            builder.Append("Candidates: <empty>");
+            return builder.ToString();
+        }
+
+        builder.AppendLine("Candidates:");
+        foreach (var skillId in group.SkillIds)
+        {
+            var label = _skillDisplay.TryGetValue(skillId, out var display)
+                ? display.SkillName
+                : $"Skill {skillId}";
+            builder.Append(" - ");
+            builder.Append(skillId.ToString(CultureInfo.InvariantCulture));
+            builder.Append(": ");
+            builder.AppendLine(label);
+        }
+
+        return builder.ToString().TrimEnd();
+    }
+
+    private static RandomSkillGroupEditModel ToEditModel(RandomSkillGroupSnapshot snapshot)
+    {
+        var ids = snapshot.SkillIds
+            .Where(x => x > 0)
+            .Distinct()
+            .OrderBy(x => x)
+            .Take(15)
+            .ToArray();
+        return new RandomSkillGroupEditModel(snapshot.GroupId, ids.Length, ids);
+    }
+
+    private static RandomSkillGroupEditModel ToEditModel(RandomSkillGroupUpsert upsert)
+    {
+        var ids = new[]
+        {
+            upsert.SkillId1, upsert.SkillId2, upsert.SkillId3, upsert.SkillId4, upsert.SkillId5,
+            upsert.SkillId6, upsert.SkillId7, upsert.SkillId8, upsert.SkillId9, upsert.SkillId10,
+            upsert.SkillId11, upsert.SkillId12, upsert.SkillId13, upsert.SkillId14, upsert.SkillId15
+        }
+        .Where(x => x > 0)
+        .Distinct()
+        .OrderBy(x => x)
+        .Take(15)
+        .ToArray();
+
+        return new RandomSkillGroupEditModel(upsert.GroupId, ids.Length, ids);
+    }
+
+    private static RandomSkillGroupUpsert ToRandomSkillGroupUpsert(RandomSkillGroupEditModel edit)
+    {
+        var ids = edit.SkillIds
+            .Where(x => x > 0)
+            .Distinct()
+            .OrderBy(x => x)
+            .Take(15)
+            .ToArray();
+
+        var slots = new int[15];
+        for (var i = 0; i < ids.Length; i++)
+        {
+            slots[i] = ids[i];
+        }
+
+        return new RandomSkillGroupUpsert(
+            edit.GroupId,
+            ids.Length,
+            slots[0], slots[1], slots[2], slots[3], slots[4],
+            slots[5], slots[6], slots[7], slots[8], slots[9],
+            slots[10], slots[11], slots[12], slots[13], slots[14]);
     }
 
     private static string BuildSkillTooltipPlain(string? markup, int skillId, string skillName)
@@ -716,6 +966,13 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (e.Row.Item is SkillTreeEntryRow entry
+            && e.Column.Header is string header
+            && string.Equals(header, "Grp", StringComparison.OrdinalIgnoreCase))
+        {
+            await EnsurePlaceholderGroupForManualGroupIdAsync(entry);
+        }
+
         await RefreshSkillNamesAndEffectiveAsync();
     }
 
@@ -734,14 +991,29 @@ public partial class MainWindow : Window
             add.IsEnabled = tree is { OriginalSkillTreeId: > 0 };
         }
 
-        if (menu.Items.Count > 1 && menu.Items[1] is MenuItem edit)
+        if (menu.Items.Count > 1 && menu.Items[1] is MenuItem editSkill)
         {
-            edit.IsEnabled = row is { SkillId: > 0 };
+            editSkill.IsEnabled = row is { SkillId: > 0 };
         }
 
         if (menu.Items.Count > 2 && menu.Items[2] is MenuItem delete)
         {
             delete.IsEnabled = row is not null;
+        }
+
+        if (menu.Items.Count > 4 && menu.Items[4] is MenuItem createGroup)
+        {
+            createGroup.IsEnabled = row is not null && row.SkillGroupId <= 0;
+        }
+
+        if (menu.Items.Count > 5 && menu.Items[5] is MenuItem editGroup)
+        {
+            editGroup.IsEnabled = row is not null && row.SkillGroupId > 0;
+        }
+
+        if (menu.Items.Count > 6 && menu.Items[6] is MenuItem detachGroup)
+        {
+            detachGroup.IsEnabled = row is not null && row.SkillGroupId > 0;
         }
     }
 
@@ -776,6 +1048,216 @@ public partial class MainWindow : Window
         }
 
         await DeleteTreeEntryAsync(tree, row);
+    }
+
+    private async void MnuTreeCreateRandomGroup_Click(object sender, RoutedEventArgs e)
+    {
+        var tree = GetSelectedTree();
+        if (tree?.SelectedEntry is not SkillTreeEntryRow row)
+        {
+            return;
+        }
+
+        if (row.SkillGroupId > 0)
+        {
+            await EditRandomGroupForRowAsync(row, row.SkillGroupId, false);
+            return;
+        }
+
+        var nextId = await GetNextAvailableRandomGroupIdAsync();
+        var previous = row.SkillGroupId;
+        row.SkillGroupId = nextId;
+        await EnsurePlaceholderGroupForManualGroupIdAsync(row);
+
+        var applied = await EditRandomGroupForRowAsync(row, nextId, true);
+        if (!applied)
+        {
+            row.SkillGroupId = previous;
+            _pendingRandomSkillGroupUpdates.Remove(nextId);
+            _randomSkillGroups.Remove(nextId);
+            await RefreshSkillNamesAndEffectiveAsync();
+        }
+    }
+
+    private async void MnuTreeEditRandomGroup_Click(object sender, RoutedEventArgs e)
+    {
+        var row = GetSelectedTree()?.SelectedEntry;
+        if (row is null || row.SkillGroupId <= 0)
+        {
+            return;
+        }
+
+        await EditRandomGroupForRowAsync(row, row.SkillGroupId, false);
+    }
+
+    private async void MnuTreeDetachRandomGroup_Click(object sender, RoutedEventArgs e)
+    {
+        var row = GetSelectedTree()?.SelectedEntry;
+        if (row is null || row.SkillGroupId <= 0)
+        {
+            return;
+        }
+
+        var groupId = row.SkillGroupId;
+        var choice = _dialogService.Show(
+            this,
+            "Detach random group",
+            $"Detach random group {groupId} from this tree row?",
+            DialogButtons.YesNo,
+            defaultResult: AppDialogResult.No);
+
+        if (choice != AppDialogResult.Yes)
+        {
+            return;
+        }
+
+        row.SkillGroupId = 0;
+        await RefreshSkillNamesAndEffectiveAsync();
+        TxtStatus.Text = $"Detached random group {groupId} from selected row.";
+    }
+
+    private async Task EnsurePlaceholderGroupForManualGroupIdAsync(SkillTreeEntryRow row)
+    {
+        if (row.SkillGroupId <= 0)
+        {
+            return;
+        }
+
+        if (_pendingRandomSkillGroupUpdates.ContainsKey(row.SkillGroupId) || _randomSkillGroups.ContainsKey(row.SkillGroupId))
+        {
+            return;
+        }
+
+        if (_repository is not null)
+        {
+            var loaded = await _repository.GetRandomSkillGroupsAsync([row.SkillGroupId]);
+            if (loaded.TryGetValue(row.SkillGroupId, out var snapshot))
+            {
+                _randomSkillGroups[row.SkillGroupId] = ToEditModel(snapshot);
+                await EnsureSkillDisplayAsync(snapshot.SkillIds.ToArray());
+                ApplyRandomGroupDisplayToRows();
+                return;
+            }
+        }
+
+        var placeholder = RandomSkillGroupEditModel.Empty(row.SkillGroupId);
+        _randomSkillGroups[row.SkillGroupId] = placeholder;
+        _pendingRandomSkillGroupUpdates[row.SkillGroupId] = ToRandomSkillGroupUpsert(placeholder);
+        ApplyRandomGroupDisplayToRows();
+        TxtStatus.Text = $"Created placeholder random group {row.SkillGroupId}.";
+    }
+
+    private async Task<bool> EditRandomGroupForRowAsync(SkillTreeEntryRow row, int groupId, bool isCreateFlow)
+    {
+        if (_repository is null)
+        {
+            return false;
+        }
+
+        await EnsurePlaceholderGroupForManualGroupIdAsync(row);
+
+        var model = GetOverlayRandomGroup(groupId) ?? RandomSkillGroupEditModel.Empty(groupId);
+        var window = new RandomSkillGroupWindow(
+            groupId,
+            model,
+            _repository,
+            _assetResolver,
+            _dialogService,
+            _skillDisplay,
+            _fallbackIcon36)
+        {
+            Owner = this
+        };
+
+        if (window.ShowDialog() != true || window.Result is null)
+        {
+            return !isCreateFlow;
+        }
+
+        var normalized = new RandomSkillGroupEditModel(
+            groupId,
+            window.Result.SkillIds.Where(x => x > 0).Distinct().OrderBy(x => x).Take(15).Count(),
+            window.Result.SkillIds.Where(x => x > 0).Distinct().OrderBy(x => x).Take(15).ToArray());
+
+        _randomSkillGroups[groupId] = normalized;
+        _pendingRandomSkillGroupUpdates[groupId] = ToRandomSkillGroupUpsert(normalized);
+        await EnsureSkillDisplayAsync(normalized.SkillIds.ToArray());
+
+        row.SkillGroupId = groupId;
+        await RefreshSkillNamesAndEffectiveAsync();
+        TxtStatus.Text = $"Random group {groupId} staged (UseCode: {normalized.UseCode}).";
+        return true;
+    }
+
+    private static (int SummonId, int TreeSlotIndex, int SkillTreeId) TreeContextKey(TreeContextState tree) =>
+        (tree.SummonId, tree.TreeSlotIndex, tree.OriginalSkillTreeId);
+
+    private void EnsureTreeContextsForRandomGroup(
+        IDictionary<(int SummonId, int TreeSlotIndex, int SkillTreeId), SkillTreeContext> contextMap,
+        IDictionary<(int SummonId, int TreeSlotIndex, int SkillTreeId), bool> cloneFlags,
+        int groupId)
+    {
+        foreach (var tree in _stageStates.SelectMany(x => x.Trees))
+        {
+            if (tree.SummonId <= 0 || tree.OriginalSkillTreeId <= 0)
+            {
+                continue;
+            }
+
+            if (!tree.CurrentEntries.Any(x => x.SkillGroupId == groupId))
+            {
+                continue;
+            }
+
+            var key = TreeContextKey(tree);
+            if (!contextMap.ContainsKey(key))
+            {
+                var snapshots = tree.CurrentEntries
+                    .Select(x => x.ToSnapshot(tree.OriginalSkillTreeId))
+                    .OrderBy(x => x.Lv)
+                    .ThenBy(x => x.SkillId)
+                    .ToList();
+
+                contextMap[key] = new SkillTreeContext(
+                    tree.SummonId,
+                    tree.TreeSlotIndex,
+                    tree.OriginalSkillTreeId,
+                    snapshots,
+                    CloneIfShared: false);
+            }
+
+            if (!cloneFlags.ContainsKey(key))
+            {
+                cloneFlags[key] = false;
+            }
+        }
+    }
+
+    private async Task<int> GetNextAvailableRandomGroupIdAsync(ISet<int>? extraReserved = null)
+    {
+        if (_repository is null)
+        {
+            return 1;
+        }
+
+        var next = await _repository.GetNextRandomSkillGroupIdAsync();
+        var reserved = _pendingRandomSkillGroupUpdates.Keys
+            .Concat(_randomSkillGroups.Keys)
+            .Concat(_stageStates.SelectMany(x => x.Trees).SelectMany(x => x.CurrentEntries).Select(x => x.SkillGroupId))
+            .Where(x => x > 0)
+            .ToHashSet();
+
+        if (extraReserved is not null)
+        {
+            reserved.UnionWith(extraReserved.Where(x => x > 0));
+        }
+
+        while (reserved.Contains(next))
+        {
+            next++;
+        }
+
+        return next;
     }
 
     private void GridEffective_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
@@ -1076,7 +1558,8 @@ public partial class MainWindow : Window
         return commitRequest.TreeContexts.Count > 0
             || commitRequest.SkillUpdates.Count > 0
             || commitRequest.StatContexts.Count > 0
-            || commitRequest.CreatureLevelBonusUpdates.Count > 0;
+            || commitRequest.CreatureLevelBonusUpdates.Count > 0
+            || commitRequest.RandomSkillGroupUpdates.Count > 0;
     }
 
     private void ClearStagedChanges()
@@ -1085,6 +1568,7 @@ public partial class MainWindow : Window
         _pendingFieldChanges.Clear();
         _pendingStatContexts.Clear();
         _pendingCreatureLevelBonusUpdates.Clear();
+        _pendingRandomSkillGroupUpdates.Clear();
         _pendingScalingFieldChanges.Clear();
     }
 
@@ -1114,7 +1598,8 @@ public partial class MainWindow : Window
             if (commitRequest.TreeContexts.Count == 0
                 && commitRequest.SkillUpdates.Count == 0
                 && commitRequest.StatContexts.Count == 0
-                && commitRequest.CreatureLevelBonusUpdates.Count == 0)
+                && commitRequest.CreatureLevelBonusUpdates.Count == 0
+                && commitRequest.RandomSkillGroupUpdates.Count == 0)
             {
                 if (origin == SaveRequestOrigin.Toolbar)
                 {
@@ -1133,7 +1618,7 @@ public partial class MainWindow : Window
             var allFieldChanges = _pendingFieldChanges
                 .Concat(_pendingScalingFieldChanges)
                 .ToList();
-            var reviewRows = BuildReviewRows(treeReviewChanges, allFieldChanges);
+            var reviewRows = BuildReviewRows(treeReviewChanges, allFieldChanges, adjustedRequest.RandomSkillGroupUpdates);
             var reviewWindow = new SaveReviewWindow(reviewRows) { Owner = this };
             if (reviewWindow.ShowDialog() != true)
             {
@@ -1188,7 +1673,7 @@ public partial class MainWindow : Window
                 _activeSummon = selected;
             }
 
-            TxtStatus.Text = $"Saved trees: {result.UpdatedTreeCount}, skills: {result.UpdatedSkillCount}.";
+            TxtStatus.Text = $"Saved trees: {result.UpdatedTreeCount}, skills: {result.UpdatedSkillCount}, random groups: {result.UpdatedRandomSkillGroupCount}.";
             _dialogService.Show(this, "Save", "Changes saved successfully.");
             return true;
         }
@@ -1212,6 +1697,7 @@ public partial class MainWindow : Window
         details.AppendLine($"Skill field updates: {request.SkillUpdates.Count}");
         details.AppendLine($"StatResource updates: {request.StatContexts.Count}");
         details.AppendLine($"Growth bonus updates: {request.CreatureLevelBonusUpdates.Count}");
+        details.AppendLine($"Random group updates: {request.RandomSkillGroupUpdates.Count}");
 
         return _dialogService.Show(
             this,
@@ -1247,7 +1733,8 @@ public partial class MainWindow : Window
 
         var statContexts = _pendingStatContexts.Values.ToList();
         var bonusUpdates = _pendingCreatureLevelBonusUpdates.Values.ToList();
-        return new CommitRequest(treeContexts, _pendingSkillUpdates.Values.ToList(), statContexts, bonusUpdates);
+        var randomGroupUpdates = _pendingRandomSkillGroupUpdates.Values.ToList();
+        return new CommitRequest(treeContexts, _pendingSkillUpdates.Values.ToList(), statContexts, bonusUpdates, randomGroupUpdates);
     }
 
     private static bool AreSnapshotsEqual(IReadOnlyList<SkillTreeEntrySnapshot> a, IReadOnlyList<SkillTreeEntrySnapshot> b)
@@ -1327,9 +1814,19 @@ public partial class MainWindow : Window
             return request;
         }
 
-        var treeCloneFlags = request.TreeContexts.ToDictionary(x => x, _ => false);
+        var treeContextMap = request.TreeContexts.ToDictionary(
+            x => (x.SummonId, x.TreeSlotIndex, x.OriginalSkillTreeId),
+            x => x);
+        var treeCloneFlags = treeContextMap.Keys.ToDictionary(x => x, _ => false);
         var statCloneFlags = request.StatContexts.ToDictionary(x => x, _ => false);
+        var randomGroupUpdates = request.RandomSkillGroupUpdates.ToDictionary(x => x.GroupId, x => x);
         var chainIds = _currentChain.OrderedStages.Select(x => x.SummonId).ToHashSet();
+        var reservedRandomGroupIds = new HashSet<int>(
+            treeContextMap.Values
+                .SelectMany(x => x.Entries)
+                .Select(x => x.SkillGroupId)
+                .Where(x => x > 0)
+                .Concat(randomGroupUpdates.Keys));
 
         var changedSkillIds = request.SkillUpdates.Select(x => x.SkillId).ToArray();
         if (changedSkillIds.Length > 0)
@@ -1354,16 +1851,101 @@ public partial class MainWindow : Window
             }
         }
 
-        var changedTreeIds = request.TreeContexts.Select(x => x.OriginalSkillTreeId).Distinct().ToArray();
+        var changedRandomGroupIds = randomGroupUpdates.Keys.ToArray();
+        if (changedRandomGroupIds.Length > 0)
+        {
+            var usage = await _repository.GetRandomSkillGroupUsageImpactAsync(changedRandomGroupIds);
+            var usageByGroup = usage
+                .GroupBy(x => x.GroupId)
+                .ToDictionary(x => x.Key, x => x.ToList());
+
+            foreach (var groupId in changedRandomGroupIds.OrderBy(x => x))
+            {
+                if (!usageByGroup.TryGetValue(groupId, out var rows))
+                {
+                    continue;
+                }
+
+                var external = rows.Where(x => !chainIds.Contains(x.SummonId)).Take(20).ToList();
+                if (external.Count == 0)
+                {
+                    continue;
+                }
+
+                var sb = new StringBuilder();
+                sb.AppendLine($"Random group {groupId} is used by other summons.");
+                sb.AppendLine("Yes = Clone group and remap current edited rows");
+                sb.AppendLine("No = Edit in place");
+                sb.AppendLine("Cancel = Abort save");
+                sb.AppendLine();
+                foreach (var row in external)
+                {
+                    sb.AppendLine($"Summon {row.SummonName} ({row.SummonId}) Tree {row.TreeSlotIndex} (SkillTree {row.SkillTreeId})");
+                }
+
+                var choice = _dialogService.Show(this, "Shared random group detected", sb.ToString(), DialogButtons.YesNoCancel, defaultResult: AppDialogResult.Cancel);
+                if (choice == AppDialogResult.Cancel)
+                {
+                    return null;
+                }
+
+                if (choice == AppDialogResult.Yes)
+                {
+                    if (!randomGroupUpdates.TryGetValue(groupId, out var current))
+                    {
+                        continue;
+                    }
+
+                    EnsureTreeContextsForRandomGroup(treeContextMap, treeCloneFlags, groupId);
+
+                    var newGroupId = await GetNextAvailableRandomGroupIdAsync(reservedRandomGroupIds);
+                    reservedRandomGroupIds.Add(newGroupId);
+
+                    randomGroupUpdates.Remove(groupId);
+                    randomGroupUpdates[newGroupId] = current with { GroupId = newGroupId };
+
+                    var keys = treeContextMap.Keys.ToArray();
+                    foreach (var key in keys)
+                    {
+                        var tree = treeContextMap[key];
+                        var changed = false;
+                        var adjustedEntries = tree.Entries
+                            .Select(entry =>
+                            {
+                                if (entry.SkillGroupId != groupId)
+                                {
+                                    return entry;
+                                }
+
+                                changed = true;
+                                return entry with { SkillGroupId = newGroupId };
+                            })
+                            .ToList();
+
+                        if (changed)
+                        {
+                            treeContextMap[key] = new SkillTreeContext(
+                                tree.SummonId,
+                                tree.TreeSlotIndex,
+                                tree.OriginalSkillTreeId,
+                                adjustedEntries,
+                                tree.CloneIfShared);
+                        }
+                    }
+                }
+            }
+        }
+
+        var changedTreeIds = treeContextMap.Values.Select(x => x.OriginalSkillTreeId).Distinct().ToArray();
         if (changedTreeIds.Length > 0)
         {
             var usage = await _repository.GetSharedTreeUsageAsync(changedTreeIds);
-            var sharedPlan = SharedTreeClonePlanner.Build(request.TreeContexts, usage, chainIds);
-            var treeContextLookup = request.TreeContexts.ToDictionary(x => (x.SummonId, x.TreeSlotIndex, x.OriginalSkillTreeId), x => x);
+            var sharedPlan = SharedTreeClonePlanner.Build(treeContextMap.Values.ToList(), usage, chainIds);
 
             foreach (var planRow in sharedPlan.Where(x => x.IsSharedExternally))
             {
-                if (!treeContextLookup.TryGetValue((planRow.SummonId, planRow.TreeSlotIndex, planRow.SkillTreeId), out var tree))
+                var key = (planRow.SummonId, planRow.TreeSlotIndex, planRow.SkillTreeId);
+                if (!treeContextMap.ContainsKey(key))
                 {
                     continue;
                 }
@@ -1385,7 +1967,7 @@ public partial class MainWindow : Window
                     return null;
                 }
 
-                treeCloneFlags[tree] = choice == AppDialogResult.Yes;
+                treeCloneFlags[key] = choice == AppDialogResult.Yes;
             }
         }
 
@@ -1457,20 +2039,30 @@ public partial class MainWindow : Window
             }
         }
 
-        var adjustedTrees = request.TreeContexts
-            .Select(x => new SkillTreeContext(x.SummonId, x.TreeSlotIndex, x.OriginalSkillTreeId, x.Entries, treeCloneFlags[x]))
+        var adjustedTrees = treeContextMap.Values
+            .Select(x =>
+            {
+                var key = (x.SummonId, x.TreeSlotIndex, x.OriginalSkillTreeId);
+                return new SkillTreeContext(
+                    x.SummonId,
+                    x.TreeSlotIndex,
+                    x.OriginalSkillTreeId,
+                    x.Entries,
+                    treeCloneFlags.GetValueOrDefault(key));
+            })
             .ToList();
 
         var adjustedStats = request.StatContexts
             .Select(x => new StatResourceContext(x.SummonId, x.OriginalStatId, x.Stats, statCloneFlags[x]))
             .ToList();
 
-        return new CommitRequest(adjustedTrees, request.SkillUpdates, adjustedStats, request.CreatureLevelBonusUpdates);
+        return new CommitRequest(adjustedTrees, request.SkillUpdates, adjustedStats, request.CreatureLevelBonusUpdates, randomGroupUpdates.Values.ToList());
     }
 
     private static IReadOnlyList<SaveReviewRow> BuildReviewRows(
         IReadOnlyList<PendingTreeEntryChange> treeChanges,
-        IReadOnlyList<PendingFieldChange> fieldChanges)
+        IReadOnlyList<PendingFieldChange> fieldChanges,
+        IReadOnlyList<RandomSkillGroupUpsert> randomGroupUpdates)
     {
         var rows = new List<SaveReviewRow>();
         foreach (var change in treeChanges)
@@ -1505,13 +2097,51 @@ public partial class MainWindow : Window
             });
         }
 
+        foreach (var group in randomGroupUpdates.OrderBy(x => x.GroupId))
+        {
+            rows.Add(new SaveReviewRow
+            {
+                ChangeType = "Random Group Upsert",
+                Target = $"Group {group.GroupId}",
+                Field = "use_code",
+                Before = string.Empty,
+                After = group.UseCode.ToString(CultureInfo.InvariantCulture)
+            });
+
+            var slots = new[]
+            {
+                group.SkillId1, group.SkillId2, group.SkillId3, group.SkillId4, group.SkillId5,
+                group.SkillId6, group.SkillId7, group.SkillId8, group.SkillId9, group.SkillId10,
+                group.SkillId11, group.SkillId12, group.SkillId13, group.SkillId14, group.SkillId15
+            };
+
+            for (var i = 0; i < slots.Length; i++)
+            {
+                if (slots[i] <= 0)
+                {
+                    continue;
+                }
+
+                rows.Add(new SaveReviewRow
+                {
+                    ChangeType = "Random Group Slot",
+                    Target = $"Group {group.GroupId}",
+                    Field = $"skill_id_{i + 1}",
+                    Before = string.Empty,
+                    After = slots[i].ToString(CultureInfo.InvariantCulture)
+                });
+            }
+        }
+
         return rows;
     }
 
     private async Task RefreshSkillNamesAndEffectiveAsync()
     {
         await PopulateSkillDisplayAsync();
+        await LoadRandomSkillGroupsForVisibleRowsAsync();
         BuildEffectiveStageRows();
+        ApplyRandomGroupDisplayToRows();
     }
 
     private async void BtnSettings_Click(object sender, RoutedEventArgs e)

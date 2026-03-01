@@ -253,6 +253,10 @@
                                                     <MenuItem x:Name="MnuTreeAddRow" Header="Add Row" Click="MnuTreeAddRow_Click" />
                                                     <MenuItem x:Name="MnuTreeEditSkill" Header="Edit Skill" Click="MnuTreeEditSkill_Click" />
                                                     <MenuItem x:Name="MnuTreeDeleteRow" Header="Delete From Tree" Click="MnuTreeDeleteRow_Click" />
+                                                    <Separator />
+                                                    <MenuItem x:Name="MnuTreeCreateRandomGroup" Header="Create Random Group" Click="MnuTreeCreateRandomGroup_Click" />
+                                                    <MenuItem x:Name="MnuTreeEditRandomGroup" Header="Edit Random Group" Click="MnuTreeEditRandomGroup_Click" />
+                                                    <MenuItem x:Name="MnuTreeDetachRandomGroup" Header="Detach Random Group" Click="MnuTreeDetachRandomGroup_Click" />
                                                 </ContextMenu>
                                             </DataGrid.ContextMenu>
                                             <DataGrid.Columns>
@@ -275,14 +279,37 @@
                                                 <DataGridTemplateColumn Header="Skill" Width="3*" MinWidth="170" IsReadOnly="True">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate>
-                                                            <TextBlock Text="{Binding SkillName}" Style="{StaticResource CenteredDisplayTextStyle}">
-                                                                <TextBlock.ToolTip>
-                                                                    <MultiBinding Converter="{StaticResource GameTooltipToToolTipConverter}">
-                                                                        <Binding Path="SkillTooltipMarkup" />
-                                                                        <Binding Path="SkillTooltipPlain" />
-                                                                    </MultiBinding>
-                                                                </TextBlock.ToolTip>
-                                                            </TextBlock>
+                                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding SkillName}" Style="{StaticResource CenteredDisplayTextStyle}">
+                                                                    <TextBlock.ToolTip>
+                                                                        <MultiBinding Converter="{StaticResource GameTooltipToToolTipConverter}">
+                                                                            <Binding Path="SkillTooltipMarkup" />
+                                                                            <Binding Path="SkillTooltipPlain" />
+                                                                        </MultiBinding>
+                                                                    </TextBlock.ToolTip>
+                                                                </TextBlock>
+                                                                <Border Margin="6,0,0,0"
+                                                                        Padding="5,1"
+                                                                        CornerRadius="4"
+                                                                        Background="{DynamicResource PanelAltBrush}"
+                                                                        BorderBrush="{DynamicResource AccentBrush}"
+                                                                        BorderThickness="1">
+                                                                    <Border.Style>
+                                                                        <Style TargetType="Border">
+                                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding IsRandomGroup}" Value="True">
+                                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </Border.Style>
+                                                                    <TextBlock Text="{Binding RandomGroupBadge}"
+                                                                               FontWeight="SemiBold"
+                                                                               Foreground="{DynamicResource AccentHoverBrush}"
+                                                                               ToolTip="{Binding RandomGroupTooltip}" />
+                                                                </Border>
+                                                            </StackPanel>
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>
@@ -356,14 +383,37 @@
                                         <DataGridTemplateColumn Header="Skill" Width="3*" MinWidth="190" IsReadOnly="True">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
-                                                    <TextBlock Text="{Binding SkillName}" Style="{StaticResource CenteredDisplayTextStyle}">
-                                                        <TextBlock.ToolTip>
-                                                            <MultiBinding Converter="{StaticResource GameTooltipToToolTipConverter}">
-                                                                <Binding Path="SkillTooltipMarkup" />
-                                                                <Binding Path="SkillTooltipPlain" />
-                                                            </MultiBinding>
-                                                        </TextBlock.ToolTip>
-                                                    </TextBlock>
+                                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding SkillName}" Style="{StaticResource CenteredDisplayTextStyle}">
+                                                            <TextBlock.ToolTip>
+                                                                <MultiBinding Converter="{StaticResource GameTooltipToToolTipConverter}">
+                                                                    <Binding Path="SkillTooltipMarkup" />
+                                                                    <Binding Path="SkillTooltipPlain" />
+                                                                </MultiBinding>
+                                                            </TextBlock.ToolTip>
+                                                        </TextBlock>
+                                                        <Border Margin="6,0,0,0"
+                                                                Padding="5,1"
+                                                                CornerRadius="4"
+                                                                Background="{DynamicResource PanelAltBrush}"
+                                                                BorderBrush="{DynamicResource AccentBrush}"
+                                                                BorderThickness="1">
+                                                            <Border.Style>
+                                                                <Style TargetType="Border">
+                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsRandomGroup}" Value="True">
+                                                                            <Setter Property="Visibility" Value="Visible" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Border.Style>
+                                                            <TextBlock Text="{Binding RandomGroupBadge}"
+                                                                       FontWeight="SemiBold"
+                                                                       Foreground="{DynamicResource AccentHoverBrush}"
+                                                                       ToolTip="{Binding RandomGroupTooltip}" />
+                                                        </Border>
+                                                    </StackPanel>
                                                 </DataTemplate>
                                             </DataGridTemplateColumn.CellTemplate>
                                         </DataGridTemplateColumn>
