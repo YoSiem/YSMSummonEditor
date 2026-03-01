@@ -184,8 +184,13 @@
                                                             VerticalAlignment="Center"
                                                             HorizontalAlignment="Center"
                                                             BorderBrush="{DynamicResource ControlBorderBrush}"
-                                                            BorderThickness="1"
-                                                            ToolTip="{Binding ToolTipText}">
+                                                            BorderThickness="1">
+                                                        <Border.ToolTip>
+                                                            <MultiBinding Converter="{StaticResource GameTooltipToToolTipConverter}">
+                                                                <Binding Path="SkillTooltipMarkup" />
+                                                                <Binding Path="SkillTooltipPlain" />
+                                                            </MultiBinding>
+                                                        </Border.ToolTip>
                                                         <Image Source="{Binding SkillIcon}" Width="36" Height="36" Stretch="Fill" />
                                                     </Border>
                                                 </DataTemplate>
@@ -195,7 +200,14 @@
                                         <DataGridTemplateColumn Header="Skill" Width="210" IsReadOnly="True">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
-                                                    <TextBlock Text="{Binding SkillName}" TextTrimming="CharacterEllipsis" ToolTip="{Binding ToolTipText}" />
+                                                    <TextBlock Text="{Binding SkillName}" TextTrimming="CharacterEllipsis">
+                                                        <TextBlock.ToolTip>
+                                                            <MultiBinding Converter="{StaticResource GameTooltipToToolTipConverter}">
+                                                                <Binding Path="SkillTooltipMarkup" />
+                                                                <Binding Path="SkillTooltipPlain" />
+                                                            </MultiBinding>
+                                                        </TextBlock.ToolTip>
+                                                    </TextBlock>
                                                 </DataTemplate>
                                             </DataGridTemplateColumn.CellTemplate>
                                         </DataGridTemplateColumn>
@@ -254,8 +266,13 @@
                                                             VerticalAlignment="Center"
                                                             HorizontalAlignment="Center"
                                                             BorderBrush="{DynamicResource ControlBorderBrush}"
-                                                            BorderThickness="1"
-                                                            ToolTip="{Binding ToolTipText}">
+                                                            BorderThickness="1">
+                                                        <Border.ToolTip>
+                                                            <MultiBinding Converter="{StaticResource GameTooltipToToolTipConverter}">
+                                                                <Binding Path="SkillTooltipMarkup" />
+                                                                <Binding Path="SkillTooltipPlain" />
+                                                            </MultiBinding>
+                                                        </Border.ToolTip>
                                                         <Image Source="{Binding SkillIcon}" Width="36" Height="36" Stretch="Fill" />
                                                     </Border>
                                                 </DataTemplate>
@@ -265,7 +282,14 @@
                                         <DataGridTemplateColumn Header="Skill" Width="220" IsReadOnly="True">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
-                                                    <TextBlock Text="{Binding SkillName}" TextTrimming="CharacterEllipsis" ToolTip="{Binding ToolTipText}" />
+                                                    <TextBlock Text="{Binding SkillName}" TextTrimming="CharacterEllipsis">
+                                                        <TextBlock.ToolTip>
+                                                            <MultiBinding Converter="{StaticResource GameTooltipToToolTipConverter}">
+                                                                <Binding Path="SkillTooltipMarkup" />
+                                                                <Binding Path="SkillTooltipPlain" />
+                                                            </MultiBinding>
+                                                        </TextBlock.ToolTip>
+                                                    </TextBlock>
                                                 </DataTemplate>
                                             </DataGridTemplateColumn.CellTemplate>
                                         </DataGridTemplateColumn>
@@ -302,8 +326,13 @@
                                                             VerticalAlignment="Center"
                                                             HorizontalAlignment="Center"
                                                             BorderBrush="{DynamicResource ControlBorderBrush}"
-                                                            BorderThickness="1"
-                                                            ToolTip="{Binding ToolTipText}">
+                                                            BorderThickness="1">
+                                                        <Border.ToolTip>
+                                                            <MultiBinding Converter="{StaticResource GameTooltipToToolTipConverter}">
+                                                                <Binding Path="SkillTooltipMarkup" />
+                                                                <Binding Path="SkillTooltipPlain" />
+                                                            </MultiBinding>
+                                                        </Border.ToolTip>
                                                         <Image Source="{Binding SkillIcon}" Width="36" Height="36" Stretch="Fill" />
                                                     </Border>
                                                 </DataTemplate>
@@ -313,7 +342,14 @@
                                         <DataGridTemplateColumn Header="Skill" Width="220" IsReadOnly="True">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
-                                                    <TextBlock Text="{Binding SkillName}" TextTrimming="CharacterEllipsis" ToolTip="{Binding ToolTipText}" />
+                                                    <TextBlock Text="{Binding SkillName}" TextTrimming="CharacterEllipsis">
+                                                        <TextBlock.ToolTip>
+                                                            <MultiBinding Converter="{StaticResource GameTooltipToToolTipConverter}">
+                                                                <Binding Path="SkillTooltipMarkup" />
+                                                                <Binding Path="SkillTooltipPlain" />
+                                                            </MultiBinding>
+                                                        </TextBlock.ToolTip>
+                                                    </TextBlock>
                                                 </DataTemplate>
                                             </DataGridTemplateColumn.CellTemplate>
                                         </DataGridTemplateColumn>
@@ -350,8 +386,13 @@
                                                             VerticalAlignment="Center"
                                                             HorizontalAlignment="Center"
                                                             BorderBrush="{DynamicResource ControlBorderBrush}"
-                                                            BorderThickness="1"
-                                                            ToolTip="{Binding ToolTipText}">
+                                                            BorderThickness="1">
+                                                        <Border.ToolTip>
+                                                            <MultiBinding Converter="{StaticResource GameTooltipToToolTipConverter}">
+                                                                <Binding Path="SkillTooltipMarkup" />
+                                                                <Binding Path="SkillTooltipPlain" />
+                                                            </MultiBinding>
+                                                        </Border.ToolTip>
                                                         <Image Source="{Binding SkillIcon}" Width="36" Height="36" Stretch="Fill" />
                                                     </Border>
                                                 </DataTemplate>
@@ -361,7 +402,14 @@
                                         <DataGridTemplateColumn Header="Skill" Width="220" IsReadOnly="True">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
-                                                    <TextBlock Text="{Binding SkillName}" TextTrimming="CharacterEllipsis" ToolTip="{Binding ToolTipText}" />
+                                                    <TextBlock Text="{Binding SkillName}" TextTrimming="CharacterEllipsis">
+                                                        <TextBlock.ToolTip>
+                                                            <MultiBinding Converter="{StaticResource GameTooltipToToolTipConverter}">
+                                                                <Binding Path="SkillTooltipMarkup" />
+                                                                <Binding Path="SkillTooltipPlain" />
+                                                            </MultiBinding>
+                                                        </TextBlock.ToolTip>
+                                                    </TextBlock>
                                                 </DataTemplate>
                                             </DataGridTemplateColumn.CellTemplate>
                                         </DataGridTemplateColumn>
