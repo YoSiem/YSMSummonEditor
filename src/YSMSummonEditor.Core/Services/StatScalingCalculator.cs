@@ -33,6 +33,12 @@ public sealed class StatScalingCalculator : IStatScalingCalculator
         var snapshot = input.Snapshot;
         var level = Math.Clamp(input.Level, 1, 350);
         var previousLevel = Math.Max(level - 1, 0);
+        var requestedEnhanceStage = input.EnhanceStage;
+        var enhanceStage = Math.Clamp(requestedEnhanceStage, 0, 5);
+        var statAmplify = input.EnhanceAmplifyByLevel.TryGetValue(enhanceStage, out var amplify)
+            ? amplify
+            : 0m;
+        var enhanceMultiplier = 1m + statAmplify;
         var growthDepth = Math.Clamp(snapshot.GrowthDepth, 1, 3);
         var stageLookup = snapshot.StageBonuses.ToDictionary(x => x.StageIndex);
 
@@ -55,8 +61,11 @@ public sealed class StatScalingCalculator : IStatScalingCalculator
             var baseValue = descriptor.BaseSelector(snapshot.BaseStats);
             var totalBonus = stageBonuses.Sum();
             var totalBonusPrevious = stageBonusesPrevious.Sum();
-            var finalValue = baseValue + totalBonus;
-            var delta = totalBonus - totalBonusPrevious;
+            var finalRaw = baseValue + totalBonus;
+            var finalRawPrevious = baseValue + totalBonusPrevious;
+            var finalValue = (int)decimal.Truncate(finalRaw * enhanceMultiplier);
+            var finalPrevious = (int)decimal.Truncate(finalRawPrevious * enhanceMultiplier);
+            var delta = finalValue - finalPrevious;
 
             rows.Add(new ScalingStatBreakdownRow(
                 descriptor.Name,
@@ -65,11 +74,12 @@ public sealed class StatScalingCalculator : IStatScalingCalculator
                 stageBonuses[1],
                 stageBonuses[2],
                 totalBonus,
+                finalRaw,
                 finalValue,
                 delta));
         }
 
-        return new ScalingResult(input.Level, level, rows);
+        return new ScalingResult(input.Level, level, requestedEnhanceStage, enhanceStage, statAmplify, rows);
     }
 
     private static int CalculateStageBonus(decimal coefficient, ScalingStageConfig config, int stageIndex, int level)

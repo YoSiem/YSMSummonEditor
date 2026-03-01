@@ -40,7 +40,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<EffectiveStageSkillRow> _effectiveEvo1Rows = [];
     private readonly ObservableCollection<EffectiveStageSkillRow> _effectiveEvo2Rows = [];
     private readonly ObservableCollection<EffectiveStageSkillRow> _effectiveEvo3Rows = [];
-    private readonly List<StageViewState> _stageStates = [];
+    private readonly List<EvolutionViewState> _stageStates = [];
 
     private readonly Dictionary<int, SkillUpdate> _pendingSkillUpdates = new();
     private readonly List<PendingFieldChange> _pendingFieldChanges = [];
@@ -53,6 +53,7 @@ public partial class MainWindow : Window
     private ISummonEditorRepository? _repository;
     private EvolutionChainSnapshot? _currentChain;
     private string _lastDiffSql = string.Empty;
+    private bool _isInitializingSaveModeToggle;
 
     public MainWindow(
         ISettingsStore settingsStore,
@@ -111,6 +112,7 @@ public partial class MainWindow : Window
         ChkIncludeRiding.IsChecked = _settings.IncludeRidingOnlyByDefault;
         ChkIncludeNonForm1.IsChecked = _settings.IncludeNonForm1ByDefault;
         ChkShowAllEvos.IsChecked = _settings.ShowAllEvolutionsByDefault;
+        ApplySaveModeToggleState(_settings.SaveToSqlMode);
 
         EnsureRepository();
         if (_repository is null)
@@ -122,6 +124,14 @@ public partial class MainWindow : Window
         }
 
         UpdateStatsButtonState();
+    }
+
+    private void ApplySaveModeToggleState(bool saveToSqlMode)
+    {
+        _isInitializingSaveModeToggle = true;
+        TglSaveMode.IsChecked = saveToSqlMode;
+        TglSaveMode.Content = saveToSqlMode ? "Mode: .sql" : "Mode: DB";
+        _isInitializingSaveModeToggle = false;
     }
 
     private async Task<bool> EnsureDefaultDumpFolderAsync()
@@ -332,10 +342,10 @@ public partial class MainWindow : Window
             }
         }
 
-        _stageStates.Add(new StageViewState
+        _stageStates.Add(new EvolutionViewState
         {
             StageIndex = stageIndex,
-            Name = $"Evo {stageIndex}",
+            Name = $"Evolution {stageIndex}",
             Trees = trees
         });
     }
@@ -478,7 +488,7 @@ public partial class MainWindow : Window
 
     private void TabStages_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (TabStages.SelectedItem is not TabItem item || item.Tag is not StageViewState stage)
+        if (TabStages.SelectedItem is not TabItem item || item.Tag is not EvolutionViewState stage)
         {
             return;
         }
@@ -582,7 +592,7 @@ public partial class MainWindow : Window
         var confirm = _dialogService.Show(
             this,
             "Confirm delete",
-            $"Delete skill {row.SkillId} from Evo {tree.StageIndex}, Tree {tree.TreeSlotIndex}?",
+            $"Delete skill {row.SkillId} from Evolution {tree.StageIndex}, Tree {tree.TreeSlotIndex}?",
             DialogButtons.YesNo,
             defaultResult: AppDialogResult.No);
 
@@ -718,7 +728,7 @@ public partial class MainWindow : Window
 
     private int GetActiveStageIndexFromTabStages()
     {
-        return TabStages.SelectedItem is TabItem item && item.Tag is StageViewState stage
+        return TabStages.SelectedItem is TabItem item && item.Tag is EvolutionViewState stage
             ? stage.StageIndex
             : 0;
     }
@@ -758,7 +768,7 @@ public partial class MainWindow : Window
         var confirm = _dialogService.Show(
             this,
             "Confirm delete",
-            $"Delete skill {row.SkillId} (Lv {row.Level}) from Evo {stage}? This will remove {row.LinkedEntries.Count} row(s).",
+            $"Delete skill {row.SkillId} (Lv {row.Level}) from Evolution {stage}? This will remove {row.LinkedEntries.Count} row(s).",
             DialogButtons.YesNo,
             defaultResult: AppDialogResult.No);
         if (confirm != AppDialogResult.Yes)
@@ -851,9 +861,10 @@ public partial class MainWindow : Window
         {
             var finalSummon = _currentChain.Stage3;
             var snapshot = await _repository.GetSummonStatScalingAsync(finalSummon.SummonId);
+            var creatureEnhance = await _repository.GetCreatureEnhanceAsync();
             snapshot = ApplyPendingScaling(snapshot);
 
-            var window = new StatScalingWindow(snapshot, _statScalingCalculator)
+            var window = new StatScalingWindow(snapshot, _statScalingCalculator, creatureEnhance)
             {
                 Owner = this
             };
@@ -942,6 +953,31 @@ public partial class MainWindow : Window
             || (string.Equals(x.Entity, "CreatureLevelBonus", StringComparison.Ordinal) && bonusKeys.Contains(x.Key)));
     }
 
+    private async void TglSaveMode_Checked(object sender, RoutedEventArgs e)
+    {
+        await SetSaveModeAsync(true);
+    }
+
+    private async void TglSaveMode_Unchecked(object sender, RoutedEventArgs e)
+    {
+        await SetSaveModeAsync(false);
+    }
+
+    private async Task SetSaveModeAsync(bool saveToSqlMode)
+    {
+        TglSaveMode.Content = saveToSqlMode ? "Mode: .sql" : "Mode: DB";
+        if (_isInitializingSaveModeToggle || _settings.SaveToSqlMode == saveToSqlMode)
+        {
+            return;
+        }
+
+        _settings.SaveToSqlMode = saveToSqlMode;
+        await _settingsStore.SaveAsync(_settings);
+        TxtStatus.Text = saveToSqlMode
+            ? "Save mode set to .sql (staged export)."
+            : "Save mode set to DB.";
+    }
+
     private async void BtnSave_Click(object sender, RoutedEventArgs e)
     {
         if (_repository is null)
@@ -977,7 +1013,33 @@ public partial class MainWindow : Window
                 return;
             }
 
-            TxtStatus.Text = "Saving changes...";
+            if (_settings.SaveToSqlMode)
+            {
+                var saveDialog = new SaveFileDialog
+                {
+                    FileName = $"summon-editor-diff-{DateTime.Now:yyyyMMdd-HHmmss}.sql",
+                    Filter = "SQL files (*.sql)|*.sql|All files (*.*)|*.*"
+                };
+
+                if (saveDialog.ShowDialog(this) != true)
+                {
+                    return;
+                }
+
+                var diffSql = DiffSqlRenderer.Render(adjustedRequest);
+                File.WriteAllText(saveDialog.FileName, diffSql);
+                _lastDiffSql = diffSql;
+                TxtStatus.Text = $"SQL diff saved: {saveDialog.FileName}. Pending changes remain staged.";
+                _dialogService.Show(this, "Save", "SQL file generated. No database write was performed.");
+                return;
+            }
+
+            if (!ConfirmDatabaseSave(adjustedRequest))
+            {
+                return;
+            }
+
+            TxtStatus.Text = "Saving changes to database...";
             var result = await _repository.CommitAsync(adjustedRequest);
             _lastDiffSql = result.DiffSql;
 
@@ -1000,6 +1062,28 @@ public partial class MainWindow : Window
             _dialogService.Show(this, "Save failed", "Could not save staged changes.", DialogButtons.Ok, ex.Message);
             TxtStatus.Text = "Save failed (see details).";
         }
+    }
+
+    private bool ConfirmDatabaseSave(CommitRequest request)
+    {
+        var details = new StringBuilder();
+        details.AppendLine("Database target:");
+        details.AppendLine($"Server: {_settings.Database.Server},{_settings.Database.Port}");
+        details.AppendLine($"Database: {_settings.Database.Database}");
+        details.AppendLine();
+        details.AppendLine("Pending payload:");
+        details.AppendLine($"SkillTree changes: {request.TreeContexts.Count}");
+        details.AppendLine($"Skill field updates: {request.SkillUpdates.Count}");
+        details.AppendLine($"StatResource updates: {request.StatContexts.Count}");
+        details.AppendLine($"Growth bonus updates: {request.CreatureLevelBonusUpdates.Count}");
+
+        return _dialogService.Show(
+            this,
+            "Confirm database save",
+            "Apply staged changes to SQL database now?",
+            DialogButtons.YesNo,
+            details.ToString(),
+            defaultResult: AppDialogResult.No) == AppDialogResult.Yes;
     }
 
     private CommitRequest BuildCommitRequest(out List<PendingTreeEntryChange> treeChanges)
@@ -1062,19 +1146,19 @@ public partial class MainWindow : Window
 
             if (hasBefore && !hasAfter)
             {
-                output.Add(new PendingTreeEntryChange(TreeChangeType.Delete, tree.OriginalSkillTreeId, original[i].SkillId, $"Evo {tree.StageIndex} Tree {tree.TreeSlotIndex}", SnapshotToDictionary(original[i]), null));
+                output.Add(new PendingTreeEntryChange(TreeChangeType.Delete, tree.OriginalSkillTreeId, original[i].SkillId, $"Evolution {tree.StageIndex} Tree {tree.TreeSlotIndex}", SnapshotToDictionary(original[i]), null));
                 continue;
             }
 
             if (!hasBefore && hasAfter)
             {
-                output.Add(new PendingTreeEntryChange(TreeChangeType.Insert, tree.OriginalSkillTreeId, current[i].SkillId, $"Evo {tree.StageIndex} Tree {tree.TreeSlotIndex}", null, SnapshotToDictionary(current[i])));
+                output.Add(new PendingTreeEntryChange(TreeChangeType.Insert, tree.OriginalSkillTreeId, current[i].SkillId, $"Evolution {tree.StageIndex} Tree {tree.TreeSlotIndex}", null, SnapshotToDictionary(current[i])));
                 continue;
             }
 
             if (hasBefore && hasAfter && original[i] != current[i])
             {
-                output.Add(new PendingTreeEntryChange(TreeChangeType.Update, tree.OriginalSkillTreeId, current[i].SkillId, $"Evo {tree.StageIndex} Tree {tree.TreeSlotIndex}", SnapshotToDictionary(original[i]), SnapshotToDictionary(current[i])));
+                output.Add(new PendingTreeEntryChange(TreeChangeType.Update, tree.OriginalSkillTreeId, current[i].SkillId, $"Evolution {tree.StageIndex} Tree {tree.TreeSlotIndex}", SnapshotToDictionary(original[i]), SnapshotToDictionary(current[i])));
             }
         }
     }
@@ -1221,15 +1305,15 @@ public partial class MainWindow : Window
             if (external.Count > 0)
             {
                 var sb = new StringBuilder();
-                sb.AppendLine("Edited CreatureLevelBonus rows are used by other summons.");
+                sb.AppendLine("Edited growth bonus rows are used by other summons.");
                 sb.AppendLine("Continue anyway?");
                 sb.AppendLine();
                 foreach (var row in external)
                 {
-                    sb.AppendLine($"Bonus {row.BonusId} -> Summon {row.SummonName} ({row.SummonId}) Stage {row.StageIndex}");
+                    sb.AppendLine($"Bonus {row.BonusId} -> Summon {row.SummonName} ({row.SummonId}) Growth Stage {row.StageIndex}");
                 }
 
-                var choice = _dialogService.Show(this, "Shared bonus detected", sb.ToString(), DialogButtons.YesNo, defaultResult: AppDialogResult.No);
+                var choice = _dialogService.Show(this, "Shared growth bonus detected", sb.ToString(), DialogButtons.YesNo, defaultResult: AppDialogResult.No);
                 if (choice != AppDialogResult.Yes)
                 {
                     return null;
@@ -1271,7 +1355,7 @@ public partial class MainWindow : Window
             {
                 "SkillResource" => ("Skill Field", $"Skill {field.Key}"),
                 "StatResource" => ("Stat Field", $"Stat {field.Key}"),
-                "CreatureLevelBonus" => ("Bonus Field", $"Bonus {field.Key}"),
+                "CreatureLevelBonus" => ("Growth Bonus Field", $"Bonus {field.Key}"),
                 _ => ($"{field.Entity} Field", $"{field.Entity} {field.Key}")
             };
 
@@ -1310,35 +1394,14 @@ public partial class MainWindow : Window
         _settings.IncludeRidingOnlyByDefault = ChkIncludeRiding.IsChecked == true;
         _settings.IncludeNonForm1ByDefault = ChkIncludeNonForm1.IsChecked == true;
         _settings.ShowAllEvolutionsByDefault = ChkShowAllEvos.IsChecked == true;
+        _settings.SaveToSqlMode = TglSaveMode.IsChecked == true;
+        ApplySaveModeToggleState(_settings.SaveToSqlMode);
 
         await _settingsStore.SaveAsync(_settings);
         EnsureRepository();
         UpdateStatsButtonState();
         await BuildAssetIndexAsync();
         await LoadSummonsAsync();
-    }
-
-    private void BtnExportDiff_Click(object sender, RoutedEventArgs e)
-    {
-        if (string.IsNullOrWhiteSpace(_lastDiffSql))
-        {
-            _dialogService.Show(this, "Export", "No diff SQL available yet.");
-            return;
-        }
-
-        var dialog = new SaveFileDialog
-        {
-            FileName = $"summon-editor-diff-{DateTime.Now:yyyyMMdd-HHmmss}.sql",
-            Filter = "SQL files (*.sql)|*.sql|All files (*.*)|*.*"
-        };
-
-        if (dialog.ShowDialog(this) != true)
-        {
-            return;
-        }
-
-        File.WriteAllText(dialog.FileName, _lastDiffSql);
-        TxtStatus.Text = $"Diff exported: {dialog.FileName}";
     }
 
     private static T? FindVisualParent<T>(DependencyObject? child) where T : DependencyObject

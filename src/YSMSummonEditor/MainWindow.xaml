@@ -72,7 +72,14 @@
                 <Button x:Name="BtnSearch" Width="108" Height="32" Margin="0,0,8,0" Content="Search" Click="BtnSearch_Click" />
                 <Button x:Name="BtnSave" Width="108" Height="32" Margin="0,0,8,0" Content="Save" Click="BtnSave_Click" />
                 <Button x:Name="BtnStats" Width="108" Height="32" Margin="0,0,8,0" Content="Stats" Click="BtnStats_Click" IsEnabled="False" />
-                <Button x:Name="BtnExportDiff" Width="108" Height="32" Margin="0,0,8,0" Content="Export SQL" Click="BtnExportDiff_Click" />
+                <ToggleButton x:Name="TglSaveMode"
+                              Width="138"
+                              Height="32"
+                              Margin="0,0,8,0"
+                              Content="Mode: DB"
+                              ToolTip="Toggle save target: Database or .sql file."
+                              Checked="TglSaveMode_Checked"
+                              Unchecked="TglSaveMode_Unchecked" />
                 <Button x:Name="BtnSettings" Width="108" Height="32" Content="Settings" Click="BtnSettings_Click" />
             </StackPanel>
         </DockPanel>

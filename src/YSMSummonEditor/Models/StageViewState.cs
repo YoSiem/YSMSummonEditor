@@ -1,6 +1,6 @@
 namespace YSMSummonEditor.Models;
 
-public sealed class StageViewState
+public sealed class EvolutionViewState
 {
     public required string Name { get; init; }
     public required int StageIndex { get; init; }

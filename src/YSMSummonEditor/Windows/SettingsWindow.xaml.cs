@@ -82,6 +82,7 @@ public partial class SettingsWindow : Window
             IncludeNonForm1ByDefault = input.IncludeNonForm1ByDefault,
             IncludeRidingOnlyByDefault = input.IncludeRidingOnlyByDefault,
             ShowAllEvolutionsByDefault = input.ShowAllEvolutionsByDefault,
+            SaveToSqlMode = input.SaveToSqlMode,
             Database = new DbConnectionSettings
             {
                 Server = input.Database.Server,

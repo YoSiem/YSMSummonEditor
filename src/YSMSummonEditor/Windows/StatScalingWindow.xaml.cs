@@ -13,23 +13,32 @@ public partial class StatScalingWindow : Window
 {
     private readonly SummonStatScalingSnapshot _original;
     private readonly IStatScalingCalculator _calculator;
+    private readonly IReadOnlyDictionary<int, decimal> _enhanceAmplifyByLevel;
     private readonly ObservableCollection<BaseStatEditRow> _baseRows = [];
     private readonly ObservableCollection<CreatureLevelBonusEditRow> _bonusRows = [];
 
-    public StatScalingWindow(SummonStatScalingSnapshot snapshot, IStatScalingCalculator calculator)
+    public StatScalingWindow(
+        SummonStatScalingSnapshot snapshot,
+        IStatScalingCalculator calculator,
+        IReadOnlyList<CreatureEnhanceSnapshot> creatureEnhance)
     {
         InitializeComponent();
 
         _original = snapshot;
         _calculator = calculator;
+        _enhanceAmplifyByLevel = creatureEnhance
+            .GroupBy(x => x.EnhanceLevel)
+            .Select(x => x.Last())
+            .ToDictionary(x => x.EnhanceLevel, x => x.StatAmplify);
 
-        TxtHeader.Text = $"Stat Scaling | Summon {_original.SummonId} | Stat ID {_original.StatId} | Depth {_original.GrowthDepth}";
+        TxtHeader.Text = $"Stat Scaling | Summon {_original.SummonId} | Stat ID {_original.StatId} | Evolution Depth {_original.GrowthDepth}";
 
         BuildRows();
         GridBase.ItemsSource = _baseRows;
         GridBonus.ItemsSource = _bonusRows;
 
         TxtLevel.Text = "1";
+        TxtEnhanceStage.Text = "0";
         RefreshCalculator();
     }
 
@@ -115,9 +124,15 @@ public partial class StatScalingWindow : Window
     private void RefreshCalculator()
     {
         var requestedLevel = ParseLevel(TxtLevel.Text);
-        var result = _calculator.Calculate(new ScalingInput(requestedLevel, BuildSnapshotFromUi()));
+        var requestedEnhanceStage = ParseEnhanceStage(TxtEnhanceStage.Text);
+        var result = _calculator.Calculate(new ScalingInput(
+            requestedLevel,
+            requestedEnhanceStage,
+            _enhanceAmplifyByLevel,
+            BuildSnapshotFromUi()));
         GridResult.ItemsSource = result.Rows;
-        TxtCalcInfo.Text = $"Requested level: {result.RequestedLevel}, effective level: {result.EffectiveLevel}.";
+        TxtEnhanceAmplify.Text = $"Stat amplify: {result.StatAmplify:F4}";
+        TxtCalcInfo.Text = $"Level {result.RequestedLevel} -> {result.EffectiveLevel} | Enhance Stage {result.RequestedEnhanceStage} -> {result.EffectiveEnhanceStage}.";
     }
 
     private static int ParseLevel(string? raw)
@@ -127,12 +142,24 @@ public partial class StatScalingWindow : Window
             : 1;
     }
 
+    private static int ParseEnhanceStage(string? raw)
+    {
+        return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : 0;
+    }
+
     private static decimal NormalizeDecimal(decimal value)
     {
         return decimal.Round(value, 4, MidpointRounding.AwayFromZero);
     }
 
     private void TxtLevel_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+    {
+        RefreshCalculator();
+    }
+
+    private void TxtEnhanceStage_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
     {
         RefreshCalculator();
     }

@@ -7,5 +7,6 @@ public sealed record ScalingStatBreakdownRow(
     int Stage2,
     int Stage3,
     int Bonus,
+    int FinalRaw,
     int Final,
     int Delta);

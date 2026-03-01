@@ -78,7 +78,7 @@
 
             <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
 
-            <GroupBox Grid.Column="2" Header="CreatureLevelBonus">
+            <GroupBox Grid.Column="2" Header="Growth Bonus (CreatureLevelBonus)">
                 <DataGrid x:Name="GridBonus"
                           AutoGenerateColumns="False"
                           CanUserAddRows="False"
@@ -88,7 +88,7 @@
                           ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                           RowStyle="{StaticResource DirtyDataGridRowStyle}">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Stage" Binding="{Binding StageIndex}" IsReadOnly="True" Width="1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
+                        <DataGridTextColumn Header="Growth Stage" Binding="{Binding StageIndex}" IsReadOnly="True" Width="1.3*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
                         <DataGridTextColumn Header="Lookup ID" Binding="{Binding LookupId}" IsReadOnly="True" Width="1.6*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
                         <DataGridTextColumn Header="STR" Binding="{Binding Str, StringFormat=F4, UpdateSourceTrigger=PropertyChanged}" Width="1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
                         <DataGridTextColumn Header="VIT" Binding="{Binding Vit, StringFormat=F4, UpdateSourceTrigger=PropertyChanged}" Width="1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
@@ -115,10 +115,17 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="120" />
+                            <ColumnDefinition Width="16" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="80" />
+                            <ColumnDefinition Width="16" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Text="Level (1..350)" />
                         <TextBox x:Name="TxtLevel" Grid.Column="1" Height="28" VerticalContentAlignment="Center" TextChanged="TxtLevel_TextChanged" />
+                        <TextBlock Grid.Column="3" VerticalAlignment="Center" Margin="0,0,8,0" Text="Enhance Stage (0..5)" />
+                        <TextBox x:Name="TxtEnhanceStage" Grid.Column="4" Height="28" VerticalContentAlignment="Center" TextChanged="TxtEnhanceStage_TextChanged" />
+                        <TextBlock x:Name="TxtEnhanceAmplify" Grid.Column="6" VerticalAlignment="Center" Foreground="{DynamicResource TextMutedBrush}" />
                     </Grid>
 
                     <TextBlock x:Name="TxtCalcInfo" Grid.Row="1" Margin="0,0,0,8" Foreground="{DynamicResource TextMutedBrush}" />
@@ -134,10 +141,11 @@
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Stat" Binding="{Binding Stat}" Width="1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
                             <DataGridTextColumn Header="Base" Binding="{Binding Base}" Width="1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
-                            <DataGridTextColumn Header="Stage1" Binding="{Binding Stage1}" Width="1.1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
-                            <DataGridTextColumn Header="Stage2" Binding="{Binding Stage2}" Width="1.1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
-                            <DataGridTextColumn Header="Stage3" Binding="{Binding Stage3}" Width="1.1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
+                            <DataGridTextColumn Header="Growth1" Binding="{Binding Stage1}" Width="1.1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
+                            <DataGridTextColumn Header="Growth2" Binding="{Binding Stage2}" Width="1.1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
+                            <DataGridTextColumn Header="Growth3" Binding="{Binding Stage3}" Width="1.1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
                             <DataGridTextColumn Header="Bonus" Binding="{Binding Bonus}" Width="1.1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
+                            <DataGridTextColumn Header="FinalRaw" Binding="{Binding FinalRaw}" Width="1.2*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
                             <DataGridTextColumn Header="Final" Binding="{Binding Final}" Width="1.1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
                             <DataGridTextColumn Header="Delta" Binding="{Binding Delta}" Width="1.1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
                         </DataGrid.Columns>
