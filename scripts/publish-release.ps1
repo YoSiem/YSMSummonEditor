@@ -1,12 +1,9 @@
-param(
-    [ValidateSet("framework-dependent", "win-x64")]
-    [string]$Flavor = "framework-dependent"
-)
+param()
 
 $ErrorActionPreference = "Stop"
 
-$publishDir = Join-Path $env:USERPROFILE "Documents\YSMReleasedTools\YSMSummonEditor\$Flavor\"
-$profile = if ($Flavor -eq "win-x64") { "Folder-win-x64" } else { "Folder-framework-dependent" }
+$publishDir = Join-Path $env:USERPROFILE "Documents\YSMReleasedTools\YSMSummonEditor\"
+$profile = "Folder-framework-dependent"
 
 if (Test-Path $publishDir) {
     Remove-Item -Path $publishDir -Recurse -Force
@@ -21,4 +18,9 @@ dotnet publish ".\src\YSMSummonEditor\YSMSummonEditor.csproj" `
     -p:GeneratePackageOnBuild=false `
     -p:DebugSymbols=false `
     -p:DebugType=None `
-    -p:GenerateDocumentationFile=false
+    -p:GenerateDocumentationFile=false `
+    -p:CopyOutputSymbolsToPublishDirectory=false `
+    -p:IncludeSymbolsInSingleFile=false
+
+Get-ChildItem -Path $publishDir -Filter *.pdb -File -ErrorAction SilentlyContinue | Remove-Item -Force
+Get-ChildItem -Path $publishDir -Filter *.xml -File -ErrorAction SilentlyContinue | Remove-Item -Force

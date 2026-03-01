@@ -37,9 +37,9 @@ Local DB bootstrap can be provided via `.env.local` (see `.env.local.template`).
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\publish-release.ps1
-powershell -ExecutionPolicy Bypass -File .\scripts\publish-release.ps1 -Flavor win-x64
 ```
 
-Outputs are published as clean folders to:
-- `%USERPROFILE%\Documents\YSMReleasedTools\YSMSummonEditor\framework-dependent\`
-- `%USERPROFILE%\Documents\YSMReleasedTools\YSMSummonEditor\win-x64\`
+Output is published as a clean framework-dependent build to:
+- `%USERPROFILE%\Documents\YSMReleasedTools\YSMSummonEditor\`
+
+Publish output excludes `.pdb` and `.xml` files.
