@@ -36,6 +36,10 @@ Local DB bootstrap can be provided via `.env.local` (see `.env.local.template`).
 ## Publish
 
 ```powershell
-dotnet publish .\src\YSMSummonEditor\YSMSummonEditor.csproj -c Release -p:PublishProfile=Folder-win-x64
-dotnet publish .\src\YSMSummonEditor\YSMSummonEditor.csproj -c Release -p:PublishProfile=Folder-framework-dependent
+powershell -ExecutionPolicy Bypass -File .\scripts\publish-release.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\publish-release.ps1 -Flavor win-x64
 ```
+
+Outputs are published as clean folders to:
+- `%USERPROFILE%\Documents\YSMReleasedTools\YSMSummonEditor\framework-dependent\`
+- `%USERPROFILE%\Documents\YSMReleasedTools\YSMSummonEditor\win-x64\`
