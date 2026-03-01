@@ -38,6 +38,19 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
+
+        <Style x:Key="CenteredDisplayTextStyle" TargetType="TextBlock">
+            <Setter Property="TextAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+
+        <Style x:Key="CenteredEditTextStyle" TargetType="TextBox">
+            <Setter Property="TextAlignment" Value="Center" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
     </Window.Resources>
 
     <Grid Margin="10" Background="{DynamicResource WindowBgBrush}">
@@ -94,8 +107,7 @@
                     <ListView x:Name="ListSummons" Grid.Row="2" SelectionChanged="ListSummons_SelectionChanged" AlternationCount="2">
                         <ListView.ItemTemplate>
                             <DataTemplate>
-                                <Grid Margin="0,2"
-                                      ToolTip="{Binding ToolTipText}">
+                                <Grid Margin="0,2" ToolTip="{Binding ToolTipText}">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="44" />
                                         <ColumnDefinition Width="*" />
@@ -118,31 +130,73 @@
 
             <Grid Grid.Column="2">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="230" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
-                    <RowDefinition Height="260" />
                 </Grid.RowDefinitions>
 
-                <Border Grid.Row="0" Margin="0,0,0,8" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10" Background="{DynamicResource PanelBgBrush}">
+                <Border Grid.Row="0" Margin="0,0,0,8" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10" Background="{DynamicResource PanelBgBrush}" MinHeight="360">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="330" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                            <TextBlock x:Name="TxtSummonHeader" FontSize="26" FontWeight="Bold" Text="No selection" ToolTip="Selected final evolution summon." />
-                            <TextBlock x:Name="TxtSummonMeta" Margin="0,8,0,0" Foreground="{DynamicResource TextMutedBrush}" ToolTip="Card and basic metadata." />
-                            <TextBlock x:Name="TxtChainInfo" Margin="0,8,0,0" Foreground="{DynamicResource TextMutedBrush}" ToolTip="Resolved evo chain IDs (E1 -> E2 -> E3)." />
-                        </StackPanel>
-                        <Border Grid.Column="1" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" Padding="4" Background="{DynamicResource PanelAltBrush}">
-                            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-                                <Image x:Name="ImgLarge" Stretch="None" SnapsToDevicePixels="True" />
-                            </ScrollViewer>
+
+                        <Grid Grid.Column="0" Margin="0,0,12,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Border Width="36" Height="36" Margin="0,0,8,0" VerticalAlignment="Center" HorizontalAlignment="Center" BorderBrush="{DynamicResource ControlBorderBrush}" BorderThickness="1">
+                                    <Image x:Name="ImgSummonHeaderIcon" Width="36" Height="36" Stretch="Fill" />
+                                </Border>
+                                <TextBlock x:Name="TxtSummonHeader" FontSize="26" FontWeight="Bold" Text="No selection" ToolTip="Selected final evolution summon." VerticalAlignment="Center" />
+                            </StackPanel>
+
+                            <TextBlock x:Name="TxtSummonFeature" Grid.Row="1" Margin="0,8,0,0" Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" ToolTip="Summon feature description." />
+
+                            <TextBlock x:Name="TxtSummonMeta" Grid.Row="2" Margin="0,8,0,0" Foreground="{DynamicResource TextMutedBrush}" ToolTip="Card and basic metadata." />
+
+                            <StackPanel Grid.Row="3" Margin="0,10,0,0" Orientation="Horizontal" VerticalAlignment="Center">
+                                <StackPanel x:Name="ChainEvo1Panel" Margin="0,0,8,0" VerticalAlignment="Center">
+                                    <Border Width="36" Height="36" BorderBrush="{DynamicResource ControlBorderBrush}" BorderThickness="1" HorizontalAlignment="Center">
+                                        <Image x:Name="ImgChainEvo1" Width="36" Height="36" Stretch="Fill" />
+                                    </Border>
+                                    <TextBlock x:Name="TxtChainEvo1Id" Margin="0,4,0,0" HorizontalAlignment="Center" Foreground="{DynamicResource TextMutedBrush}" />
+                                </StackPanel>
+
+                                <TextBlock x:Name="TxtChainArrow12" Margin="0,0,8,0" VerticalAlignment="Center" FontSize="18" Text="→" />
+
+                                <StackPanel x:Name="ChainEvo2Panel" Margin="0,0,8,0" VerticalAlignment="Center">
+                                    <Border Width="36" Height="36" BorderBrush="{DynamicResource ControlBorderBrush}" BorderThickness="1" HorizontalAlignment="Center">
+                                        <Image x:Name="ImgChainEvo2" Width="36" Height="36" Stretch="Fill" />
+                                    </Border>
+                                    <TextBlock x:Name="TxtChainEvo2Id" Margin="0,4,0,0" HorizontalAlignment="Center" Foreground="{DynamicResource TextMutedBrush}" />
+                                </StackPanel>
+
+                                <TextBlock x:Name="TxtChainArrow23" Margin="0,0,8,0" VerticalAlignment="Center" FontSize="18" Text="→" />
+
+                                <StackPanel x:Name="ChainEvo3Panel" VerticalAlignment="Center">
+                                    <Border Width="36" Height="36" BorderBrush="{DynamicResource ControlBorderBrush}" BorderThickness="1" HorizontalAlignment="Center">
+                                        <Image x:Name="ImgChainEvo3" Width="36" Height="36" Stretch="Fill" />
+                                    </Border>
+                                    <TextBlock x:Name="TxtChainEvo3Id" Margin="0,4,0,0" HorizontalAlignment="Center" Foreground="{DynamicResource TextMutedBrush}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Grid>
+
+                        <Border Grid.Column="1" Width="228" Height="328" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" Padding="4" Background="{DynamicResource PanelAltBrush}" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <Grid>
+                                <Image x:Name="ImgLarge" Width="220" Height="320" Stretch="Uniform" SnapsToDevicePixels="True" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Grid>
                         </Border>
                     </Grid>
                 </Border>
 
-                <Grid Grid.Row="1" Margin="0,0,0,8">
+                <Grid Grid.Row="1">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
@@ -150,99 +204,103 @@
 
                     <TabControl x:Name="TabStages" Grid.Row="0" SelectionChanged="TabStages_SelectionChanged" />
 
-                    <TabControl x:Name="TabTrees" Grid.Row="1" Margin="0,8,0,0">
-                        <TabControl.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding Header}" ToolTip="{Binding HeaderToolTip}" />
-                            </DataTemplate>
-                        </TabControl.ItemTemplate>
-                        <TabControl.ContentTemplate>
-                            <DataTemplate>
-                                <DataGrid ItemsSource="{Binding CurrentEntries}"
-                                          SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
-                                          AutoGenerateColumns="False"
-                                          CanUserAddRows="False"
-                                          CanUserReorderColumns="False"
-                                          SelectionMode="Single"
-                                          IsReadOnly="False"
-                                          CellEditEnding="GridTree_CellEditEnding"
-                                          PreviewMouseRightButtonDown="GridTree_PreviewMouseRightButtonDown"
-                                          RowStyle="{StaticResource DirtyDataGridRowStyle}">
-                                    <DataGrid.ContextMenu>
-                                        <ContextMenu Opened="TreeContextMenu_Opened">
-                                            <MenuItem x:Name="MnuTreeAddRow" Header="Add Row" Click="MnuTreeAddRow_Click" />
-                                            <MenuItem x:Name="MnuTreeEditSkill" Header="Edit Skill" Click="MnuTreeEditSkill_Click" />
-                                            <MenuItem x:Name="MnuTreeDeleteRow" Header="Delete From Tree" Click="MnuTreeDeleteRow_Click" />
-                                        </ContextMenu>
-                                    </DataGrid.ContextMenu>
-                                    <DataGrid.Columns>
-                                        <DataGridTemplateColumn Header="" Width="44" IsReadOnly="True">
-                                            <DataGridTemplateColumn.CellTemplate>
-                                                <DataTemplate>
-                                                    <Border Width="36"
-                                                            Height="36"
-                                                            VerticalAlignment="Center"
-                                                            HorizontalAlignment="Center"
-                                                            BorderBrush="{DynamicResource ControlBorderBrush}"
-                                                            BorderThickness="1">
-                                                        <Border.ToolTip>
-                                                            <MultiBinding Converter="{StaticResource GameTooltipToToolTipConverter}">
-                                                                <Binding Path="SkillTooltipMarkup" />
-                                                                <Binding Path="SkillTooltipPlain" />
-                                                            </MultiBinding>
-                                                        </Border.ToolTip>
-                                                        <Image Source="{Binding SkillIcon}" Width="36" Height="36" Stretch="Fill" />
-                                                    </Border>
-                                                </DataTemplate>
-                                            </DataGridTemplateColumn.CellTemplate>
-                                        </DataGridTemplateColumn>
-                                        <DataGridTextColumn Header="ID" Binding="{Binding SkillId, UpdateSourceTrigger=PropertyChanged}" Width="70" />
-                                        <DataGridTemplateColumn Header="Skill" Width="210" IsReadOnly="True">
-                                            <DataGridTemplateColumn.CellTemplate>
-                                                <DataTemplate>
-                                                    <TextBlock Text="{Binding SkillName}" TextTrimming="CharacterEllipsis">
-                                                        <TextBlock.ToolTip>
-                                                            <MultiBinding Converter="{StaticResource GameTooltipToToolTipConverter}">
-                                                                <Binding Path="SkillTooltipMarkup" />
-                                                                <Binding Path="SkillTooltipPlain" />
-                                                            </MultiBinding>
-                                                        </TextBlock.ToolTip>
-                                                    </TextBlock>
-                                                </DataTemplate>
-                                            </DataGridTemplateColumn.CellTemplate>
-                                        </DataGridTemplateColumn>
-                                        <DataGridTextColumn Header="Grp" Binding="{Binding SkillGroupId, UpdateSourceTrigger=PropertyChanged}" Width="55" />
-                                        <DataGridTextColumn Header="Min" Binding="{Binding MinSkillLv, UpdateSourceTrigger=PropertyChanged}" Width="55" />
-                                        <DataGridTextColumn Header="Max" Binding="{Binding MaxSkillLv, UpdateSourceTrigger=PropertyChanged}" Width="55" />
-                                        <DataGridTextColumn Header="Lv" Binding="{Binding Lv, UpdateSourceTrigger=PropertyChanged}" Width="52" />
-                                        <DataGridTextColumn Header="Job" Binding="{Binding JobLv, UpdateSourceTrigger=PropertyChanged}" Width="55" />
-                                        <DataGridTextColumn Header="N1" Binding="{Binding NeedSkillId1, UpdateSourceTrigger=PropertyChanged}" Width="55" />
-                                        <DataGridTextColumn Header="N1 Lv" Binding="{Binding NeedSkillLv1, UpdateSourceTrigger=PropertyChanged}" Width="60" />
-                                        <DataGridTextColumn Header="N2" Binding="{Binding NeedSkillId2, UpdateSourceTrigger=PropertyChanged}" Width="55" />
-                                        <DataGridTextColumn Header="N2 Lv" Binding="{Binding NeedSkillLv2, UpdateSourceTrigger=PropertyChanged}" Width="60" />
-                                        <DataGridTextColumn Header="N3" Binding="{Binding NeedSkillId3, UpdateSourceTrigger=PropertyChanged}" Width="55" />
-                                        <DataGridTextColumn Header="N3 Lv" Binding="{Binding NeedSkillLv3, UpdateSourceTrigger=PropertyChanged}" Width="60" />
-                                        <DataGridTextColumn Header="E Min" Binding="{Binding CEnhanceMin, UpdateSourceTrigger=PropertyChanged}" Width="62" />
-                                        <DataGridTextColumn Header="E Max" Binding="{Binding CEnhanceMax, UpdateSourceTrigger=PropertyChanged}" Width="62" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
-                            </DataTemplate>
-                        </TabControl.ContentTemplate>
-                    </TabControl>
-                </Grid>
+                    <Grid Grid.Row="1" Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
 
-                <Border Grid.Row="2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10" Background="{DynamicResource PanelBgBrush}">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
-                        <TextBlock FontWeight="SemiBold" FontSize="16" Text="Effective Skills" Margin="0,0,0,8" ToolTip="Merged by Skill ID + Lv in each evolution stage." />
+                        <Border Grid.Column="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="8" Background="{DynamicResource PanelBgBrush}">
+                            <TabControl x:Name="TabTrees">
+                                <TabControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Header}" ToolTip="{Binding HeaderToolTip}" />
+                                    </DataTemplate>
+                                </TabControl.ItemTemplate>
+                                <TabControl.ContentTemplate>
+                                    <DataTemplate>
+                                        <DataGrid ItemsSource="{Binding CurrentEntries}"
+                                                  SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
+                                                  AutoGenerateColumns="False"
+                                                  CanUserAddRows="False"
+                                                  CanUserReorderColumns="False"
+                                                  SelectionMode="Single"
+                                                  IsReadOnly="False"
+                                                  CellEditEnding="GridTree_CellEditEnding"
+                                                  PreviewMouseRightButtonDown="GridTree_PreviewMouseRightButtonDown"
+                                                  RowStyle="{StaticResource DirtyDataGridRowStyle}">
+                                            <DataGrid.ContextMenu>
+                                                <ContextMenu Opened="TreeContextMenu_Opened">
+                                                    <MenuItem x:Name="MnuTreeAddRow" Header="Add Row" Click="MnuTreeAddRow_Click" />
+                                                    <MenuItem x:Name="MnuTreeEditSkill" Header="Edit Skill" Click="MnuTreeEditSkill_Click" />
+                                                    <MenuItem x:Name="MnuTreeDeleteRow" Header="Delete From Tree" Click="MnuTreeDeleteRow_Click" />
+                                                </ContextMenu>
+                                            </DataGrid.ContextMenu>
+                                            <DataGrid.Columns>
+                                                <DataGridTemplateColumn Header="" Width="44" IsReadOnly="True">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <Border Width="36" Height="36" VerticalAlignment="Center" HorizontalAlignment="Center" BorderBrush="{DynamicResource ControlBorderBrush}" BorderThickness="1">
+                                                                <Border.ToolTip>
+                                                                    <MultiBinding Converter="{StaticResource GameTooltipToToolTipConverter}">
+                                                                        <Binding Path="SkillTooltipMarkup" />
+                                                                        <Binding Path="SkillTooltipPlain" />
+                                                                    </MultiBinding>
+                                                                </Border.ToolTip>
+                                                                <Image Source="{Binding SkillIcon}" Width="36" Height="36" Stretch="Fill" />
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
+                                                <DataGridTextColumn Header="ID" Binding="{Binding SkillId, UpdateSourceTrigger=PropertyChanged}" Width="70" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                                <DataGridTemplateColumn Header="Skill" Width="210" IsReadOnly="True">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock Text="{Binding SkillName}" Style="{StaticResource CenteredDisplayTextStyle}">
+                                                                <TextBlock.ToolTip>
+                                                                    <MultiBinding Converter="{StaticResource GameTooltipToToolTipConverter}">
+                                                                        <Binding Path="SkillTooltipMarkup" />
+                                                                        <Binding Path="SkillTooltipPlain" />
+                                                                    </MultiBinding>
+                                                                </TextBlock.ToolTip>
+                                                            </TextBlock>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
+                                                <DataGridTextColumn Header="Grp" Binding="{Binding SkillGroupId, UpdateSourceTrigger=PropertyChanged}" Width="55" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                                <DataGridTextColumn Header="Min" Binding="{Binding MinSkillLv, UpdateSourceTrigger=PropertyChanged}" Width="55" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                                <DataGridTextColumn Header="Max" Binding="{Binding MaxSkillLv, UpdateSourceTrigger=PropertyChanged}" Width="55" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                                <DataGridTextColumn Header="Lv" Binding="{Binding Lv, UpdateSourceTrigger=PropertyChanged}" Width="52" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                                <DataGridTextColumn Header="Job" Binding="{Binding JobLv, UpdateSourceTrigger=PropertyChanged}" Width="55" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                                <DataGridTextColumn Header="N1" Binding="{Binding NeedSkillId1, UpdateSourceTrigger=PropertyChanged}" Width="55" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                                <DataGridTextColumn Header="N1 Lv" Binding="{Binding NeedSkillLv1, UpdateSourceTrigger=PropertyChanged}" Width="60" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                                <DataGridTextColumn Header="N2" Binding="{Binding NeedSkillId2, UpdateSourceTrigger=PropertyChanged}" Width="55" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                                <DataGridTextColumn Header="N2 Lv" Binding="{Binding NeedSkillLv2, UpdateSourceTrigger=PropertyChanged}" Width="60" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                                <DataGridTextColumn Header="N3" Binding="{Binding NeedSkillId3, UpdateSourceTrigger=PropertyChanged}" Width="55" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                                <DataGridTextColumn Header="N3 Lv" Binding="{Binding NeedSkillLv3, UpdateSourceTrigger=PropertyChanged}" Width="60" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                                <DataGridTextColumn Header="E Min" Binding="{Binding CEnhanceMin, UpdateSourceTrigger=PropertyChanged}" Width="62" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                                <DataGridTextColumn Header="E Max" Binding="{Binding CEnhanceMax, UpdateSourceTrigger=PropertyChanged}" Width="62" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+                                    </DataTemplate>
+                                </TabControl.ContentTemplate>
+                            </TabControl>
+                        </Border>
 
-                        <TabControl x:Name="TabEffectiveStages" Grid.Row="1" SelectionChanged="TabEffectiveStages_SelectionChanged">
-                            <TabItem Header="Evo 1">
-                                <DataGrid x:Name="GridEffectiveEvo1"
-                                          Tag="1"
+                        <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+
+                        <Border Grid.Column="2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="8" Background="{DynamicResource PanelBgBrush}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+
+                                <TextBlock FontWeight="SemiBold" FontSize="16" Text="Effective Skills" Margin="0,0,0,8" ToolTip="Merged by Skill ID + Lv for selected evolution stage." />
+
+                                <DataGrid x:Name="GridEffective"
+                                          Grid.Row="1"
                                           AutoGenerateColumns="False"
                                           CanUserAddRows="False"
                                           CanUserReorderColumns="False"
@@ -261,12 +319,7 @@
                                         <DataGridTemplateColumn Header="" Width="44" IsReadOnly="True">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
-                                                    <Border Width="36"
-                                                            Height="36"
-                                                            VerticalAlignment="Center"
-                                                            HorizontalAlignment="Center"
-                                                            BorderBrush="{DynamicResource ControlBorderBrush}"
-                                                            BorderThickness="1">
+                                                    <Border Width="36" Height="36" VerticalAlignment="Center" HorizontalAlignment="Center" BorderBrush="{DynamicResource ControlBorderBrush}" BorderThickness="1">
                                                         <Border.ToolTip>
                                                             <MultiBinding Converter="{StaticResource GameTooltipToToolTipConverter}">
                                                                 <Binding Path="SkillTooltipMarkup" />
@@ -278,11 +331,11 @@
                                                 </DataTemplate>
                                             </DataGridTemplateColumn.CellTemplate>
                                         </DataGridTemplateColumn>
-                                        <DataGridTextColumn Header="ID" Binding="{Binding SkillId}" Width="70" IsReadOnly="True" />
+                                        <DataGridTextColumn Header="ID" Binding="{Binding SkillId}" Width="70" IsReadOnly="True" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
                                         <DataGridTemplateColumn Header="Skill" Width="220" IsReadOnly="True">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
-                                                    <TextBlock Text="{Binding SkillName}" TextTrimming="CharacterEllipsis">
+                                                    <TextBlock Text="{Binding SkillName}" Style="{StaticResource CenteredDisplayTextStyle}">
                                                         <TextBlock.ToolTip>
                                                             <MultiBinding Converter="{StaticResource GameTooltipToToolTipConverter}">
                                                                 <Binding Path="SkillTooltipMarkup" />
@@ -293,135 +346,15 @@
                                                 </DataTemplate>
                                             </DataGridTemplateColumn.CellTemplate>
                                         </DataGridTemplateColumn>
-                                        <DataGridTextColumn Header="Min" Binding="{Binding MinSkillLv, UpdateSourceTrigger=PropertyChanged}" Width="55" />
-                                        <DataGridTextColumn Header="Max" Binding="{Binding MaxSkillLv, UpdateSourceTrigger=PropertyChanged}" Width="55" />
-                                        <DataGridTextColumn Header="Lv" Binding="{Binding Level}" Width="50" IsReadOnly="True" />
+                                        <DataGridTextColumn Header="Min" Binding="{Binding MinSkillLv, UpdateSourceTrigger=PropertyChanged}" Width="55" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                        <DataGridTextColumn Header="Max" Binding="{Binding MaxSkillLv, UpdateSourceTrigger=PropertyChanged}" Width="55" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                        <DataGridTextColumn Header="Lv" Binding="{Binding Level}" Width="50" IsReadOnly="True" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
                                     </DataGrid.Columns>
                                 </DataGrid>
-                            </TabItem>
-
-                            <TabItem Header="Evo 2">
-                                <DataGrid x:Name="GridEffectiveEvo2"
-                                          Tag="2"
-                                          AutoGenerateColumns="False"
-                                          CanUserAddRows="False"
-                                          CanUserReorderColumns="False"
-                                          SelectionMode="Single"
-                                          IsReadOnly="False"
-                                          RowStyle="{StaticResource DirtyDataGridRowStyle}"
-                                          PreviewMouseRightButtonDown="GridEffective_PreviewMouseRightButtonDown"
-                                          CellEditEnding="GridEffective_CellEditEnding">
-                                    <DataGrid.ContextMenu>
-                                        <ContextMenu Opened="EffectiveContextMenu_Opened">
-                                            <MenuItem Header="Edit Skill" Click="MnuEffectiveEditSkill_Click" />
-                                            <MenuItem Header="Delete From Tree" Click="MnuEffectiveDeleteRow_Click" />
-                                        </ContextMenu>
-                                    </DataGrid.ContextMenu>
-                                    <DataGrid.Columns>
-                                        <DataGridTemplateColumn Header="" Width="44" IsReadOnly="True">
-                                            <DataGridTemplateColumn.CellTemplate>
-                                                <DataTemplate>
-                                                    <Border Width="36"
-                                                            Height="36"
-                                                            VerticalAlignment="Center"
-                                                            HorizontalAlignment="Center"
-                                                            BorderBrush="{DynamicResource ControlBorderBrush}"
-                                                            BorderThickness="1">
-                                                        <Border.ToolTip>
-                                                            <MultiBinding Converter="{StaticResource GameTooltipToToolTipConverter}">
-                                                                <Binding Path="SkillTooltipMarkup" />
-                                                                <Binding Path="SkillTooltipPlain" />
-                                                            </MultiBinding>
-                                                        </Border.ToolTip>
-                                                        <Image Source="{Binding SkillIcon}" Width="36" Height="36" Stretch="Fill" />
-                                                    </Border>
-                                                </DataTemplate>
-                                            </DataGridTemplateColumn.CellTemplate>
-                                        </DataGridTemplateColumn>
-                                        <DataGridTextColumn Header="ID" Binding="{Binding SkillId}" Width="70" IsReadOnly="True" />
-                                        <DataGridTemplateColumn Header="Skill" Width="220" IsReadOnly="True">
-                                            <DataGridTemplateColumn.CellTemplate>
-                                                <DataTemplate>
-                                                    <TextBlock Text="{Binding SkillName}" TextTrimming="CharacterEllipsis">
-                                                        <TextBlock.ToolTip>
-                                                            <MultiBinding Converter="{StaticResource GameTooltipToToolTipConverter}">
-                                                                <Binding Path="SkillTooltipMarkup" />
-                                                                <Binding Path="SkillTooltipPlain" />
-                                                            </MultiBinding>
-                                                        </TextBlock.ToolTip>
-                                                    </TextBlock>
-                                                </DataTemplate>
-                                            </DataGridTemplateColumn.CellTemplate>
-                                        </DataGridTemplateColumn>
-                                        <DataGridTextColumn Header="Min" Binding="{Binding MinSkillLv, UpdateSourceTrigger=PropertyChanged}" Width="55" />
-                                        <DataGridTextColumn Header="Max" Binding="{Binding MaxSkillLv, UpdateSourceTrigger=PropertyChanged}" Width="55" />
-                                        <DataGridTextColumn Header="Lv" Binding="{Binding Level}" Width="50" IsReadOnly="True" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
-                            </TabItem>
-
-                            <TabItem Header="Evo 3">
-                                <DataGrid x:Name="GridEffectiveEvo3"
-                                          Tag="3"
-                                          AutoGenerateColumns="False"
-                                          CanUserAddRows="False"
-                                          CanUserReorderColumns="False"
-                                          SelectionMode="Single"
-                                          IsReadOnly="False"
-                                          RowStyle="{StaticResource DirtyDataGridRowStyle}"
-                                          PreviewMouseRightButtonDown="GridEffective_PreviewMouseRightButtonDown"
-                                          CellEditEnding="GridEffective_CellEditEnding">
-                                    <DataGrid.ContextMenu>
-                                        <ContextMenu Opened="EffectiveContextMenu_Opened">
-                                            <MenuItem Header="Edit Skill" Click="MnuEffectiveEditSkill_Click" />
-                                            <MenuItem Header="Delete From Tree" Click="MnuEffectiveDeleteRow_Click" />
-                                        </ContextMenu>
-                                    </DataGrid.ContextMenu>
-                                    <DataGrid.Columns>
-                                        <DataGridTemplateColumn Header="" Width="44" IsReadOnly="True">
-                                            <DataGridTemplateColumn.CellTemplate>
-                                                <DataTemplate>
-                                                    <Border Width="36"
-                                                            Height="36"
-                                                            VerticalAlignment="Center"
-                                                            HorizontalAlignment="Center"
-                                                            BorderBrush="{DynamicResource ControlBorderBrush}"
-                                                            BorderThickness="1">
-                                                        <Border.ToolTip>
-                                                            <MultiBinding Converter="{StaticResource GameTooltipToToolTipConverter}">
-                                                                <Binding Path="SkillTooltipMarkup" />
-                                                                <Binding Path="SkillTooltipPlain" />
-                                                            </MultiBinding>
-                                                        </Border.ToolTip>
-                                                        <Image Source="{Binding SkillIcon}" Width="36" Height="36" Stretch="Fill" />
-                                                    </Border>
-                                                </DataTemplate>
-                                            </DataGridTemplateColumn.CellTemplate>
-                                        </DataGridTemplateColumn>
-                                        <DataGridTextColumn Header="ID" Binding="{Binding SkillId}" Width="70" IsReadOnly="True" />
-                                        <DataGridTemplateColumn Header="Skill" Width="220" IsReadOnly="True">
-                                            <DataGridTemplateColumn.CellTemplate>
-                                                <DataTemplate>
-                                                    <TextBlock Text="{Binding SkillName}" TextTrimming="CharacterEllipsis">
-                                                        <TextBlock.ToolTip>
-                                                            <MultiBinding Converter="{StaticResource GameTooltipToToolTipConverter}">
-                                                                <Binding Path="SkillTooltipMarkup" />
-                                                                <Binding Path="SkillTooltipPlain" />
-                                                            </MultiBinding>
-                                                        </TextBlock.ToolTip>
-                                                    </TextBlock>
-                                                </DataTemplate>
-                                            </DataGridTemplateColumn.CellTemplate>
-                                        </DataGridTemplateColumn>
-                                        <DataGridTextColumn Header="Min" Binding="{Binding MinSkillLv, UpdateSourceTrigger=PropertyChanged}" Width="55" />
-                                        <DataGridTextColumn Header="Max" Binding="{Binding MaxSkillLv, UpdateSourceTrigger=PropertyChanged}" Width="55" />
-                                        <DataGridTextColumn Header="Lv" Binding="{Binding Level}" Width="50" IsReadOnly="True" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
-                            </TabItem>
-                        </TabControl>
+                            </Grid>
+                        </Border>
                     </Grid>
-                </Border>
+                </Grid>
             </Grid>
         </Grid>
 

@@ -49,7 +49,6 @@ public partial class MainWindow : Window
     private ISummonEditorRepository? _repository;
     private EvolutionChainSnapshot? _currentChain;
     private string _lastDiffSql = string.Empty;
-    private int _effectiveContextStage = 1;
 
     public MainWindow(
         ISettingsStore settingsStore,
@@ -67,9 +66,7 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         ListSummons.ItemsSource = _summonItems;
-        GridEffectiveEvo1.ItemsSource = _effectiveEvo1Rows;
-        GridEffectiveEvo2.ItemsSource = _effectiveEvo2Rows;
-        GridEffectiveEvo3.ItemsSource = _effectiveEvo3Rows;
+        GridEffective.ItemsSource = _effectiveEvo1Rows;
 
         Loaded += MainWindow_Loaded;
     }
@@ -476,25 +473,69 @@ public partial class MainWindow : Window
         {
             TabTrees.SelectedIndex = 0;
         }
+
+        UpdateEffectiveGridForStage(stage.StageIndex);
+    }
+
+    private void UpdateEffectiveGridForStage(int stageIndex)
+    {
+        GridEffective.ItemsSource = stageIndex switch
+        {
+            1 => _effectiveEvo1Rows,
+            2 => _effectiveEvo2Rows,
+            3 => _effectiveEvo3Rows,
+            _ => null
+        };
     }
 
     private void UpdateHeader(SummonListItem final)
     {
         TxtSummonHeader.Text = final.SummonName;
         TxtSummonHeader.ToolTip = $"{final.SummonName} ({final.SummonId})";
+        var featureText = final.FeatureText?.Trim();
+        TxtSummonFeature.Text = featureText ?? string.Empty;
+        TxtSummonFeature.ToolTip = string.IsNullOrWhiteSpace(featureText) ? null : featureText;
+        TxtSummonFeature.Visibility = string.IsNullOrWhiteSpace(featureText) ? Visibility.Collapsed : Visibility.Visible;
+        ImgSummonHeaderIcon.Source = ImageLoader.TryLoad(_assetResolver.ResolveSummonFace(final.FaceFileName));
         TxtSummonMeta.Text = $"ID: {final.SummonId} | Card: {final.CardId}";
         TxtSummonMeta.ToolTip = $"Card: {final.CardName ?? "Unknown"} ({final.CardId})";
-        TxtChainInfo.Text = _currentChain is null ? string.Empty : $"Chain: {FormatChainIds(_currentChain)}";
-        TxtChainInfo.ToolTip = "Resolved stages from the selected final evolution.";
+        UpdateChainVisual(_currentChain);
 
         var large = _assetResolver.ResolveSummonIllust(final.IllustFileName);
         ImgLarge.Source = ImageLoader.TryLoad(large);
     }
 
-    private static string FormatChainIds(EvolutionChainSnapshot chain)
+    private void UpdateChainVisual(EvolutionChainSnapshot? chain)
     {
-        var ids = chain.OrderedStages.Select(x => x.SummonId.ToString(CultureInfo.InvariantCulture));
-        return string.Join(" -> ", ids);
+        UpdateChainStage(chain?.Stage1, ChainEvo1Panel, ImgChainEvo1, TxtChainEvo1Id);
+        UpdateChainStage(chain?.Stage2, ChainEvo2Panel, ImgChainEvo2, TxtChainEvo2Id);
+        UpdateChainStage(chain?.Stage3, ChainEvo3Panel, ImgChainEvo3, TxtChainEvo3Id);
+
+        TxtChainArrow12.Visibility = chain is { Stage1: not null, Stage2: not null }
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        TxtChainArrow23.Visibility = chain is { Stage2: not null, Stage3: not null }
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+    }
+
+    private void UpdateChainStage(
+        SummonListItem? stage,
+        FrameworkElement stageContainer,
+        Image stageIcon,
+        TextBlock stageIdText)
+    {
+        if (stage is null)
+        {
+            stageContainer.Visibility = Visibility.Collapsed;
+            stageIcon.Source = null;
+            stageIdText.Text = string.Empty;
+            return;
+        }
+
+        stageContainer.Visibility = Visibility.Visible;
+        stageIcon.Source = ImageLoader.TryLoad(_assetResolver.ResolveSummonFace(stage.FaceFileName));
+        stageIdText.Text = stage.SummonId.ToString(CultureInfo.InvariantCulture);
     }
 
     private TreeContextState? GetSelectedTree() => TabTrees.SelectedItem as TreeContextState;
@@ -632,11 +673,6 @@ public partial class MainWindow : Window
         {
             grid.SelectedItem = stageRow;
             row.IsSelected = true;
-            _effectiveContextStage = ResolveStageFromEffectiveGrid(grid);
-        }
-        else
-        {
-            _effectiveContextStage = 0;
         }
     }
 
@@ -660,46 +696,17 @@ public partial class MainWindow : Window
         }
     }
 
-    private int ResolveEffectiveActionStage()
+    private int GetActiveStageIndexFromTabStages()
     {
-        return _effectiveContextStage is >= 1 and <= 3
-            ? _effectiveContextStage
+        return TabStages.SelectedItem is TabItem item && item.Tag is StageViewState stage
+            ? stage.StageIndex
             : 0;
-    }
-
-    private static int ResolveStageFromEffectiveGrid(DataGrid grid)
-    {
-        if (grid.Tag is int stageByInt)
-        {
-            return stageByInt;
-        }
-
-        if (grid.Tag is string stageByString && int.TryParse(stageByString, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
-        {
-            return parsed;
-        }
-
-        return grid.Name switch
-        {
-            "GridEffectiveEvo1" => 1,
-            "GridEffectiveEvo2" => 2,
-            "GridEffectiveEvo3" => 3,
-            _ => 0
-        };
     }
 
     private (int Stage, EffectiveStageSkillRow? Row) GetSelectedEffectiveRow()
     {
-        var stage = ResolveEffectiveActionStage();
-        var grid = stage switch
-        {
-            1 => GridEffectiveEvo1,
-            2 => GridEffectiveEvo2,
-            3 => GridEffectiveEvo3,
-            _ => null
-        };
-
-        return grid?.SelectedItem is EffectiveStageSkillRow row
+        var stage = GetActiveStageIndexFromTabStages();
+        return GridEffective.SelectedItem is EffectiveStageSkillRow row
             ? (stage, row)
             : (stage, null);
     }
@@ -760,7 +767,7 @@ public partial class MainWindow : Window
     {
         if (e.EditAction == DataGridEditAction.Commit)
         {
-            var stage = sender is DataGrid grid ? ResolveStageFromEffectiveGrid(grid) : 0;
+            var stage = GetActiveStageIndexFromTabStages();
             if (stage > 0 && e.Row.Item is EffectiveStageSkillRow row)
             {
                 foreach (var linked in row.LinkedEntries)
@@ -1070,22 +1077,6 @@ public partial class MainWindow : Window
     {
         await PopulateSkillDisplayAsync();
         BuildEffectiveStageRows();
-    }
-
-    private void TabEffectiveStages_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (TabEffectiveStages.SelectedItem is not TabItem tab)
-        {
-            return;
-        }
-
-        _effectiveContextStage = tab.Header switch
-        {
-            "Evo 1" => 1,
-            "Evo 2" => 2,
-            "Evo 3" => 3,
-            _ => 0
-        };
     }
 
     private async void BtnSettings_Click(object sender, RoutedEventArgs e)
