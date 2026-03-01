@@ -6,6 +6,26 @@
         Width="980"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource WindowBgBrush}">
+    <Window.Resources>
+        <Style x:Key="DirtyDataGridRowStyle" TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsDirty}" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource RowDirtyBrush}" />
+                </DataTrigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource RowSelectedBrush}" />
+                    <Setter Property="Foreground" Value="White" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="GridEditTextStyle" TargetType="TextBox">
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+            <Setter Property="CaretBrush" Value="{DynamicResource TextPrimaryBrush}" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+    </Window.Resources>
+
     <Grid Margin="14" Background="{DynamicResource WindowBgBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -25,12 +45,12 @@
                       AutoGenerateColumns="False"
                       CanUserAddRows="False"
                       SelectionMode="Single"
-                      IsReadOnly="False">
+                      IsReadOnly="False"
+                      RowStyle="{StaticResource DirtyDataGridRowStyle}">
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="Field" Binding="{Binding Name}" IsReadOnly="True" Width="280" />
                     <DataGridTextColumn Header="Orig" Binding="{Binding OriginalValue}" IsReadOnly="True" Width="220" />
-                    <DataGridTextColumn Header="Cur" Binding="{Binding CurrentValue, UpdateSourceTrigger=PropertyChanged}" Width="220" />
-                    <DataGridCheckBoxColumn Header="Dirty" Binding="{Binding IsDirty}" IsReadOnly="True" Width="80" />
+                    <DataGridTextColumn Header="Cur" Binding="{Binding CurrentValue, UpdateSourceTrigger=PropertyChanged}" Width="220" EditingElementStyle="{StaticResource GridEditTextStyle}" />
                 </DataGrid.Columns>
             </DataGrid>
         </GroupBox>
@@ -40,12 +60,12 @@
                       AutoGenerateColumns="False"
                       CanUserAddRows="False"
                       SelectionMode="Single"
-                      IsReadOnly="False">
+                      IsReadOnly="False"
+                      RowStyle="{StaticResource DirtyDataGridRowStyle}">
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="Field" Binding="{Binding Name}" IsReadOnly="True" Width="260" />
                     <DataGridTextColumn Header="Orig" Binding="{Binding OriginalValue}" IsReadOnly="True" Width="210" />
-                    <DataGridTextColumn Header="Cur" Binding="{Binding CurrentValue, UpdateSourceTrigger=PropertyChanged}" Width="210" />
-                    <DataGridCheckBoxColumn Header="Dirty" Binding="{Binding IsDirty}" IsReadOnly="True" Width="80" />
+                    <DataGridTextColumn Header="Cur" Binding="{Binding CurrentValue, UpdateSourceTrigger=PropertyChanged}" Width="210" EditingElementStyle="{StaticResource GridEditTextStyle}" />
                 </DataGrid.Columns>
             </DataGrid>
         </GroupBox>

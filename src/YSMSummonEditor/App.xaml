@@ -15,7 +15,7 @@
         <SolidColorBrush x:Key="AccentHoverBrush" Color="#6B849F" />
         <SolidColorBrush x:Key="RowOddBrush" Color="#20262F" />
         <SolidColorBrush x:Key="RowEvenBrush" Color="#252C36" />
-        <SolidColorBrush x:Key="RowDirtyBrush" Color="#364556" />
+        <SolidColorBrush x:Key="RowDirtyBrush" Color="#5A2F35" />
         <SolidColorBrush x:Key="RowSelectedBrush" Color="#4A5F78" />
         <SolidColorBrush x:Key="ControlBgBrush" Color="#2B313B" />
         <SolidColorBrush x:Key="ControlBorderBrush" Color="#434C59" />
@@ -220,6 +220,19 @@
             <Setter Property="RowBackground" Value="{DynamicResource RowOddBrush}" />
             <Setter Property="AlternatingRowBackground" Value="{DynamicResource RowEvenBrush}" />
             <Setter Property="AlternationCount" Value="2" />
+        </Style>
+
+        <Style TargetType="DataGridRow">
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsDirty}" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource RowDirtyBrush}" />
+                </DataTrigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource RowSelectedBrush}" />
+                    <Setter Property="Foreground" Value="White" />
+                </Trigger>
+            </Style.Triggers>
         </Style>
 
         <Style TargetType="DataGridRowHeader">

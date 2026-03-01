@@ -2,9 +2,9 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Stat Scaling Editor"
-        Width="1460"
+        Width="1620"
         Height="780"
-        MinWidth="1200"
+        MinWidth="1380"
         MinHeight="680"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource WindowBgBrush}">
@@ -32,6 +32,8 @@
             <Setter Property="TextAlignment" Value="Center" />
             <Setter Property="HorizontalContentAlignment" Value="Center" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+            <Setter Property="CaretBrush" Value="{DynamicResource TextPrimaryBrush}" />
         </Style>
     </Window.Resources>
 
@@ -53,7 +55,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="3*" />
                 <ColumnDefinition Width="8" />
-                <ColumnDefinition Width="4*" />
+                <ColumnDefinition Width="5*" />
                 <ColumnDefinition Width="8" />
                 <ColumnDefinition Width="5*" />
             </Grid.ColumnDefinitions>
@@ -65,11 +67,11 @@
                           CanUserReorderColumns="False"
                           IsReadOnly="False"
                           SelectionMode="Single"
+                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                           RowStyle="{StaticResource DirtyDataGridRowStyle}">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Stat" Binding="{Binding StatName}" IsReadOnly="True" Width="*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
-                        <DataGridTextColumn Header="Base Value" Binding="{Binding CurrentValue, UpdateSourceTrigger=PropertyChanged}" Width="*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
-                        <DataGridCheckBoxColumn Header="Dirty" Binding="{Binding IsDirty, Mode=OneWay}" IsReadOnly="True" Width="72" />
+                        <DataGridTextColumn Header="Stat" Binding="{Binding StatName}" IsReadOnly="True" Width="2*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
+                        <DataGridTextColumn Header="Base Value" Binding="{Binding CurrentValue, UpdateSourceTrigger=PropertyChanged}" Width="3*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
                     </DataGrid.Columns>
                 </DataGrid>
             </GroupBox>
@@ -83,18 +85,18 @@
                           CanUserReorderColumns="False"
                           IsReadOnly="False"
                           SelectionMode="Single"
+                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                           RowStyle="{StaticResource DirtyDataGridRowStyle}">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Stage" Binding="{Binding StageIndex}" IsReadOnly="True" Width="56" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
-                        <DataGridTextColumn Header="Lookup ID" Binding="{Binding LookupId}" IsReadOnly="True" Width="88" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
-                        <DataGridTextColumn Header="STR" Binding="{Binding Str, StringFormat=F4, UpdateSourceTrigger=PropertyChanged}" Width="70" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
-                        <DataGridTextColumn Header="VIT" Binding="{Binding Vit, StringFormat=F4, UpdateSourceTrigger=PropertyChanged}" Width="70" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
-                        <DataGridTextColumn Header="DEX" Binding="{Binding Dex, StringFormat=F4, UpdateSourceTrigger=PropertyChanged}" Width="70" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
-                        <DataGridTextColumn Header="AGI" Binding="{Binding Agi, StringFormat=F4, UpdateSourceTrigger=PropertyChanged}" Width="70" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
-                        <DataGridTextColumn Header="INT" Binding="{Binding Int, StringFormat=F4, UpdateSourceTrigger=PropertyChanged}" Width="70" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
-                        <DataGridTextColumn Header="MEN" Binding="{Binding Men, StringFormat=F4, UpdateSourceTrigger=PropertyChanged}" Width="70" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
-                        <DataGridTextColumn Header="LUK" Binding="{Binding Luk, StringFormat=F4, UpdateSourceTrigger=PropertyChanged}" Width="70" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
-                        <DataGridCheckBoxColumn Header="Dirty" Binding="{Binding IsDirty, Mode=OneWay}" IsReadOnly="True" Width="62" />
+                        <DataGridTextColumn Header="Stage" Binding="{Binding StageIndex}" IsReadOnly="True" Width="1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
+                        <DataGridTextColumn Header="Lookup ID" Binding="{Binding LookupId}" IsReadOnly="True" Width="1.6*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
+                        <DataGridTextColumn Header="STR" Binding="{Binding Str, StringFormat=F4, UpdateSourceTrigger=PropertyChanged}" Width="1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                        <DataGridTextColumn Header="VIT" Binding="{Binding Vit, StringFormat=F4, UpdateSourceTrigger=PropertyChanged}" Width="1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                        <DataGridTextColumn Header="DEX" Binding="{Binding Dex, StringFormat=F4, UpdateSourceTrigger=PropertyChanged}" Width="1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                        <DataGridTextColumn Header="AGI" Binding="{Binding Agi, StringFormat=F4, UpdateSourceTrigger=PropertyChanged}" Width="1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                        <DataGridTextColumn Header="INT" Binding="{Binding Int, StringFormat=F4, UpdateSourceTrigger=PropertyChanged}" Width="1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                        <DataGridTextColumn Header="MEN" Binding="{Binding Men, StringFormat=F4, UpdateSourceTrigger=PropertyChanged}" Width="1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                        <DataGridTextColumn Header="LUK" Binding="{Binding Luk, StringFormat=F4, UpdateSourceTrigger=PropertyChanged}" Width="1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
                     </DataGrid.Columns>
                 </DataGrid>
             </GroupBox>
@@ -127,16 +129,17 @@
                               CanUserAddRows="False"
                               CanUserReorderColumns="False"
                               IsReadOnly="True"
+                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                               SelectionMode="Single">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Stat" Binding="{Binding Stat}" Width="64" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
-                            <DataGridTextColumn Header="Base" Binding="{Binding Base}" Width="64" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
-                            <DataGridTextColumn Header="Stage1" Binding="{Binding Stage1}" Width="72" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
-                            <DataGridTextColumn Header="Stage2" Binding="{Binding Stage2}" Width="72" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
-                            <DataGridTextColumn Header="Stage3" Binding="{Binding Stage3}" Width="72" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
-                            <DataGridTextColumn Header="Bonus" Binding="{Binding Bonus}" Width="72" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
-                            <DataGridTextColumn Header="Final" Binding="{Binding Final}" Width="72" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
-                            <DataGridTextColumn Header="Delta" Binding="{Binding Delta}" Width="72" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
+                            <DataGridTextColumn Header="Stat" Binding="{Binding Stat}" Width="1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
+                            <DataGridTextColumn Header="Base" Binding="{Binding Base}" Width="1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
+                            <DataGridTextColumn Header="Stage1" Binding="{Binding Stage1}" Width="1.1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
+                            <DataGridTextColumn Header="Stage2" Binding="{Binding Stage2}" Width="1.1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
+                            <DataGridTextColumn Header="Stage3" Binding="{Binding Stage3}" Width="1.1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
+                            <DataGridTextColumn Header="Bonus" Binding="{Binding Bonus}" Width="1.1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
+                            <DataGridTextColumn Header="Final" Binding="{Binding Final}" Width="1.1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
+                            <DataGridTextColumn Header="Delta" Binding="{Binding Delta}" Width="1.1*" ElementStyle="{StaticResource CenteredDisplayTextStyle}" />
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>
