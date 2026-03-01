@@ -68,7 +68,7 @@ public static class DataGridColumnAutoFit
     private static void Apply(DataGrid grid)
     {
         var spec = GetLayoutSpec(grid);
-        if (string.IsNullOrWhiteSpace(spec) || grid.Columns.Count == 0 || grid.ActualWidth <= 0)
+        if (string.IsNullOrWhiteSpace(spec) || grid.Columns.Count == 0 || !IsFinitePositive(grid.ActualWidth))
         {
             return;
         }
@@ -79,11 +79,19 @@ public static class DataGridColumnAutoFit
             return;
         }
 
-        var rowHeaderWidth = grid.HeadersVisibility.HasFlag(DataGridHeadersVisibility.Row)
-            ? Math.Max(grid.RowHeaderWidth, 22d)
-            : 0d;
-        var available = grid.ActualWidth - rowHeaderWidth - SystemParameters.VerticalScrollBarWidth - 10d;
-        if (available <= 0)
+        var rowHeaderWidth = 0d;
+        if (grid.HeadersVisibility.HasFlag(DataGridHeadersVisibility.Row))
+        {
+            rowHeaderWidth = IsFinitePositive(grid.RowHeaderWidth)
+                ? Math.Max(grid.RowHeaderWidth, 22d)
+                : 22d;
+        }
+
+        var scrollbarWidth = IsFiniteNonNegative(SystemParameters.VerticalScrollBarWidth)
+            ? SystemParameters.VerticalScrollBarWidth
+            : 12d;
+        var available = grid.ActualWidth - rowHeaderWidth - scrollbarWidth - 10d;
+        if (!IsFinitePositive(available))
         {
             return;
         }
@@ -96,16 +104,20 @@ public static class DataGridColumnAutoFit
         {
             if (rule.IsFixed)
             {
-                fixedWidth += Math.Max(rule.Value, rule.MinWidth);
+                fixedWidth += Math.Max(SanitizeNonNegative(rule.Value), SanitizeNonNegative(rule.MinWidth));
             }
             else
             {
-                weightedMinWidth += rule.MinWidth;
-                weightSum += Math.Max(0.0001d, rule.Value);
+                weightedMinWidth += SanitizeNonNegative(rule.MinWidth);
+                weightSum += Math.Max(0.0001d, SanitizeNonNegative(rule.Value));
             }
         }
 
         var freeWidth = Math.Max(0d, available - fixedWidth - weightedMinWidth);
+        if (!IsFiniteNonNegative(freeWidth))
+        {
+            freeWidth = 0d;
+        }
 
         foreach (var rule in rules)
         {
@@ -118,15 +130,22 @@ public static class DataGridColumnAutoFit
             double width;
             if (rule.IsFixed)
             {
-                width = Math.Max(rule.Value, rule.MinWidth);
+                width = Math.Max(SanitizeNonNegative(rule.Value), SanitizeNonNegative(rule.MinWidth));
             }
             else
             {
-                var normalizedWeight = Math.Max(0.0001d, rule.Value) / weightSum;
-                width = rule.MinWidth + (freeWidth * normalizedWeight);
+                var normalizedWeight = weightSum <= 0d
+                    ? 0d
+                    : Math.Max(0.0001d, SanitizeNonNegative(rule.Value)) / weightSum;
+                width = SanitizeNonNegative(rule.MinWidth) + (freeWidth * normalizedWeight);
             }
 
-            column.Width = new DataGridLength(width);
+            if (!IsFinitePositive(width))
+            {
+                width = Math.Max(SanitizeNonNegative(rule.MinWidth), 42d);
+            }
+
+            column.Width = new DataGridLength(width, DataGridLengthUnitType.Pixel);
         }
     }
 
@@ -160,7 +179,7 @@ public static class DataGridColumnAutoFit
             }
 
             var isFixed = string.Equals(mode, "f", StringComparison.OrdinalIgnoreCase);
-            result.Add(new ColumnRule(index, isFixed, value, minWidth));
+            result.Add(new ColumnRule(index, isFixed, SanitizeNonNegative(value), SanitizeNonNegative(minWidth)));
         }
 
         if (result.Count > 0)
@@ -174,5 +193,20 @@ public static class DataGridColumnAutoFit
         }
 
         return result;
+    }
+
+    private static bool IsFinitePositive(double value)
+    {
+        return !double.IsNaN(value) && !double.IsInfinity(value) && value > 0d;
+    }
+
+    private static bool IsFiniteNonNegative(double value)
+    {
+        return !double.IsNaN(value) && !double.IsInfinity(value) && value >= 0d;
+    }
+
+    private static double SanitizeNonNegative(double value)
+    {
+        return IsFiniteNonNegative(value) ? value : 0d;
     }
 }
