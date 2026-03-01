@@ -24,6 +24,7 @@ public partial class App : System.Windows.Application
                 services.AddSingleton<SqlConnectionFactory>();
                 services.AddSingleton<IValueConversionService, ValueConversionService>();
                 services.AddSingleton<ISkillUpdateBuilder, SkillUpdateBuilder>();
+                services.AddSingleton<IStatScalingCalculator, StatScalingCalculator>();
                 services.AddSingleton<IAppDialogService, AppDialogService>();
                 services.AddSingleton<MainWindow>();
             })

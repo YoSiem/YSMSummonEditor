@@ -33,6 +33,7 @@ public partial class MainWindow : Window
     private readonly IAssetResolver _assetResolver;
     private readonly SqlConnectionFactory _connectionFactory;
     private readonly ISkillUpdateBuilder _skillUpdateBuilder;
+    private readonly IStatScalingCalculator _statScalingCalculator;
     private readonly IAppDialogService _dialogService;
 
     private readonly ObservableCollection<SummonDisplayItem> _summonItems = [];
@@ -43,6 +44,9 @@ public partial class MainWindow : Window
 
     private readonly Dictionary<int, SkillUpdate> _pendingSkillUpdates = new();
     private readonly List<PendingFieldChange> _pendingFieldChanges = [];
+    private readonly Dictionary<int, StatResourceContext> _pendingStatContexts = new();
+    private readonly Dictionary<int, CreatureLevelBonusUpsert> _pendingCreatureLevelBonusUpdates = new();
+    private readonly List<PendingFieldChange> _pendingScalingFieldChanges = [];
     private readonly Dictionary<int, SkillDisplaySnapshot> _skillDisplay = new();
 
     private SummonEditorSettings _settings = new();
@@ -55,12 +59,14 @@ public partial class MainWindow : Window
         IAssetResolver assetResolver,
         SqlConnectionFactory connectionFactory,
         ISkillUpdateBuilder skillUpdateBuilder,
+        IStatScalingCalculator statScalingCalculator,
         IAppDialogService dialogService)
     {
         _settingsStore = settingsStore;
         _assetResolver = assetResolver;
         _connectionFactory = connectionFactory;
         _skillUpdateBuilder = skillUpdateBuilder;
+        _statScalingCalculator = statScalingCalculator;
         _dialogService = dialogService;
 
         InitializeComponent();
@@ -114,6 +120,8 @@ public partial class MainWindow : Window
                 ? dbNotConfiguredMessage
                 : $"{TxtStatus.Text} {dbNotConfiguredMessage}";
         }
+
+        UpdateStatsButtonState();
     }
 
     private async Task<bool> EnsureDefaultDumpFolderAsync()
@@ -219,6 +227,8 @@ public partial class MainWindow : Window
     {
         if (ListSummons.SelectedItem is not SummonDisplayItem selected)
         {
+            _currentChain = null;
+            UpdateStatsButtonState();
             return;
         }
 
@@ -237,6 +247,9 @@ public partial class MainWindow : Window
             TxtStatus.Text = "Loading evolution chain...";
             _pendingSkillUpdates.Clear();
             _pendingFieldChanges.Clear();
+            _pendingStatContexts.Clear();
+            _pendingCreatureLevelBonusUpdates.Clear();
+            _pendingScalingFieldChanges.Clear();
             _stageStates.Clear();
             _skillDisplay.Clear();
 
@@ -252,6 +265,7 @@ public partial class MainWindow : Window
             BuildEffectiveStageRows();
             BindStageTabs();
             UpdateHeader(final);
+            UpdateStatsButtonState();
 
             TxtStatus.Text = "Chain loaded.";
         }
@@ -259,6 +273,7 @@ public partial class MainWindow : Window
         {
             _dialogService.Show(this, "Chain load failed", "Could not load evolution chain.", DialogButtons.Ok, ex.Message);
             TxtStatus.Text = "Chain load failed (see details).";
+            UpdateStatsButtonState();
         }
     }
 
@@ -503,6 +518,11 @@ public partial class MainWindow : Window
 
         var large = _assetResolver.ResolveSummonIllust(final.IllustFileName);
         ImgLarge.Source = ImageLoader.TryLoad(large);
+    }
+
+    private void UpdateStatsButtonState()
+    {
+        BtnStats.IsEnabled = _repository is not null && _currentChain?.Stage3 is not null;
     }
 
     private void UpdateChainVisual(EvolutionChainSnapshot? chain)
@@ -819,6 +839,109 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void BtnStats_Click(object sender, RoutedEventArgs e)
+    {
+        if (_repository is null || _currentChain?.Stage3 is null)
+        {
+            UpdateStatsButtonState();
+            return;
+        }
+
+        try
+        {
+            var finalSummon = _currentChain.Stage3;
+            var snapshot = await _repository.GetSummonStatScalingAsync(finalSummon.SummonId);
+            snapshot = ApplyPendingScaling(snapshot);
+
+            var window = new StatScalingWindow(snapshot, _statScalingCalculator)
+            {
+                Owner = this
+            };
+
+            if (window.ShowDialog() != true || window.Result is null)
+            {
+                return;
+            }
+
+            ApplyScalingEditResult(snapshot, window.Result);
+            TxtStatus.Text = "Stat scaling changes staged.";
+        }
+        catch (Exception ex)
+        {
+            _dialogService.Show(this, "Stat scaling", "Could not open stat scaling editor.", DialogButtons.Ok, ex.Message);
+            TxtStatus.Text = "Stat scaling open failed (see details).";
+        }
+    }
+
+    private SummonStatScalingSnapshot ApplyPendingScaling(SummonStatScalingSnapshot snapshot)
+    {
+        var baseStats = _pendingStatContexts.TryGetValue(snapshot.SummonId, out var statContext)
+            ? statContext.Stats
+            : snapshot.BaseStats;
+
+        var stagedBonuses = snapshot.StageBonuses
+            .Select(x =>
+            {
+                if (_pendingCreatureLevelBonusUpdates.TryGetValue(x.LookupId, out var pending))
+                {
+                    return x with
+                    {
+                        Str = pending.Str,
+                        Vit = pending.Vit,
+                        Dex = pending.Dex,
+                        Agi = pending.Agi,
+                        Int = pending.Int,
+                        Men = pending.Men,
+                        Luk = pending.Luk,
+                        ExistsInDb = true
+                    };
+                }
+
+                return x;
+            })
+            .ToList();
+
+        return snapshot with { BaseStats = baseStats, StageBonuses = stagedBonuses };
+    }
+
+    private void ApplyScalingEditResult(SummonStatScalingSnapshot snapshot, StatScalingEditResult result)
+    {
+        if (result.StatContext is null)
+        {
+            _pendingStatContexts.Remove(snapshot.SummonId);
+        }
+        else
+        {
+            _pendingStatContexts[snapshot.SummonId] = result.StatContext;
+        }
+
+        var lookupIds = snapshot.StageBonuses.Select(x => x.LookupId).ToHashSet();
+        foreach (var lookupId in lookupIds)
+        {
+            _pendingCreatureLevelBonusUpdates.Remove(lookupId);
+        }
+
+        foreach (var upsert in result.BonusUpdates)
+        {
+            _pendingCreatureLevelBonusUpdates[upsert.BonusId] = upsert;
+        }
+
+        RemoveScalingFieldChanges(snapshot);
+        _pendingScalingFieldChanges.AddRange(result.FieldChanges);
+    }
+
+    private void RemoveScalingFieldChanges(SummonStatScalingSnapshot snapshot)
+    {
+        var statKey = snapshot.StatId.ToString(CultureInfo.InvariantCulture);
+        var bonusKeys = snapshot.StageBonuses
+            .Select(x => x.LookupId.ToString(CultureInfo.InvariantCulture))
+            .ToHashSet(StringComparer.Ordinal);
+
+        _pendingScalingFieldChanges.RemoveAll(x =>
+            (string.Equals(x.Entity, "StatResource", StringComparison.Ordinal) && string.Equals(x.Key, statKey, StringComparison.Ordinal))
+            || (string.Equals(x.Entity, "CreatureLevelBonus", StringComparison.Ordinal) && bonusKeys.Contains(x.Key)));
+    }
+
     private async void BtnSave_Click(object sender, RoutedEventArgs e)
     {
         if (_repository is null)
@@ -829,7 +952,10 @@ public partial class MainWindow : Window
         try
         {
             var commitRequest = BuildCommitRequest(out var treeReviewChanges);
-            if (commitRequest.TreeContexts.Count == 0 && commitRequest.SkillUpdates.Count == 0)
+            if (commitRequest.TreeContexts.Count == 0
+                && commitRequest.SkillUpdates.Count == 0
+                && commitRequest.StatContexts.Count == 0
+                && commitRequest.CreatureLevelBonusUpdates.Count == 0)
             {
                 _dialogService.Show(this, "Save", "No changes to save.");
                 return;
@@ -841,7 +967,10 @@ public partial class MainWindow : Window
                 return;
             }
 
-            var reviewRows = BuildReviewRows(treeReviewChanges, _pendingFieldChanges);
+            var allFieldChanges = _pendingFieldChanges
+                .Concat(_pendingScalingFieldChanges)
+                .ToList();
+            var reviewRows = BuildReviewRows(treeReviewChanges, allFieldChanges);
             var reviewWindow = new SaveReviewWindow(reviewRows) { Owner = this };
             if (reviewWindow.ShowDialog() != true)
             {
@@ -854,6 +983,9 @@ public partial class MainWindow : Window
 
             _pendingSkillUpdates.Clear();
             _pendingFieldChanges.Clear();
+            _pendingStatContexts.Clear();
+            _pendingCreatureLevelBonusUpdates.Clear();
+            _pendingScalingFieldChanges.Clear();
 
             if (ListSummons.SelectedItem is SummonDisplayItem selected)
             {
@@ -893,7 +1025,9 @@ public partial class MainWindow : Window
             treeContexts.Add(new SkillTreeContext(tree.SummonId, tree.TreeSlotIndex, tree.OriginalSkillTreeId, current, tree.CloneIfShared));
         }
 
-        return new CommitRequest(treeContexts, _pendingSkillUpdates.Values.ToList());
+        var statContexts = _pendingStatContexts.Values.ToList();
+        var bonusUpdates = _pendingCreatureLevelBonusUpdates.Values.ToList();
+        return new CommitRequest(treeContexts, _pendingSkillUpdates.Values.ToList(), statContexts, bonusUpdates);
     }
 
     private static bool AreSnapshotsEqual(IReadOnlyList<SkillTreeEntrySnapshot> a, IReadOnlyList<SkillTreeEntrySnapshot> b)
@@ -973,7 +1107,8 @@ public partial class MainWindow : Window
             return request;
         }
 
-        var cloneFlags = request.TreeContexts.ToDictionary(x => x, _ => false);
+        var treeCloneFlags = request.TreeContexts.ToDictionary(x => x, _ => false);
+        var statCloneFlags = request.StatContexts.ToDictionary(x => x, _ => false);
         var chainIds = _currentChain.OrderedStages.Select(x => x.SummonId).ToHashSet();
 
         var changedSkillIds = request.SkillUpdates.Select(x => x.SkillId).ToArray();
@@ -1030,15 +1165,87 @@ public partial class MainWindow : Window
                     return null;
                 }
 
-                cloneFlags[tree] = choice == AppDialogResult.Yes;
+                treeCloneFlags[tree] = choice == AppDialogResult.Yes;
+            }
+        }
+
+        var changedStatIds = request.StatContexts
+            .Select(x => x.OriginalStatId)
+            .Where(x => x > 0)
+            .Distinct()
+            .ToArray();
+        if (changedStatIds.Length > 0)
+        {
+            var usage = await _repository.GetStatUsageImpactAsync(changedStatIds);
+            var usageByStat = usage.GroupBy(x => x.StatId).ToDictionary(x => x.Key, x => x.ToList());
+
+            foreach (var stat in request.StatContexts)
+            {
+                if (!usageByStat.TryGetValue(stat.OriginalStatId, out var rows))
+                {
+                    continue;
+                }
+
+                var external = rows.Where(x => !chainIds.Contains(x.SummonId)).Take(20).ToList();
+                if (external.Count == 0)
+                {
+                    continue;
+                }
+
+                var sb = new StringBuilder();
+                sb.AppendLine($"StatResource {stat.OriginalStatId} is shared with other summons.");
+                sb.AppendLine("Yes = Clone stat and remap selected summon");
+                sb.AppendLine("No = Edit in place");
+                sb.AppendLine("Cancel = Abort save");
+                sb.AppendLine();
+                foreach (var row in external)
+                {
+                    sb.AppendLine($"Summon {row.SummonName} ({row.SummonId})");
+                }
+
+                var choice = _dialogService.Show(this, "Shared stat detected", sb.ToString(), DialogButtons.YesNoCancel, defaultResult: AppDialogResult.Cancel);
+                if (choice == AppDialogResult.Cancel)
+                {
+                    return null;
+                }
+
+                statCloneFlags[stat] = choice == AppDialogResult.Yes;
+            }
+        }
+
+        var changedBonusIds = request.CreatureLevelBonusUpdates.Select(x => x.BonusId).Distinct().ToArray();
+        if (changedBonusIds.Length > 0)
+        {
+            var usage = await _repository.GetCreatureLevelBonusUsageImpactAsync(changedBonusIds);
+            var external = usage.Where(x => !chainIds.Contains(x.SummonId)).Take(30).ToList();
+            if (external.Count > 0)
+            {
+                var sb = new StringBuilder();
+                sb.AppendLine("Edited CreatureLevelBonus rows are used by other summons.");
+                sb.AppendLine("Continue anyway?");
+                sb.AppendLine();
+                foreach (var row in external)
+                {
+                    sb.AppendLine($"Bonus {row.BonusId} -> Summon {row.SummonName} ({row.SummonId}) Stage {row.StageIndex}");
+                }
+
+                var choice = _dialogService.Show(this, "Shared bonus detected", sb.ToString(), DialogButtons.YesNo, defaultResult: AppDialogResult.No);
+                if (choice != AppDialogResult.Yes)
+                {
+                    return null;
+                }
             }
         }
 
         var adjustedTrees = request.TreeContexts
-            .Select(x => new SkillTreeContext(x.SummonId, x.TreeSlotIndex, x.OriginalSkillTreeId, x.Entries, cloneFlags[x]))
+            .Select(x => new SkillTreeContext(x.SummonId, x.TreeSlotIndex, x.OriginalSkillTreeId, x.Entries, treeCloneFlags[x]))
             .ToList();
 
-        return new CommitRequest(adjustedTrees, request.SkillUpdates);
+        var adjustedStats = request.StatContexts
+            .Select(x => new StatResourceContext(x.SummonId, x.OriginalStatId, x.Stats, statCloneFlags[x]))
+            .ToList();
+
+        return new CommitRequest(adjustedTrees, request.SkillUpdates, adjustedStats, request.CreatureLevelBonusUpdates);
     }
 
     private static IReadOnlyList<SaveReviewRow> BuildReviewRows(
@@ -1060,10 +1267,18 @@ public partial class MainWindow : Window
 
         foreach (var field in fieldChanges)
         {
+            var (changeType, target) = field.Entity switch
+            {
+                "SkillResource" => ("Skill Field", $"Skill {field.Key}"),
+                "StatResource" => ("Stat Field", $"Stat {field.Key}"),
+                "CreatureLevelBonus" => ("Bonus Field", $"Bonus {field.Key}"),
+                _ => ($"{field.Entity} Field", $"{field.Entity} {field.Key}")
+            };
+
             rows.Add(new SaveReviewRow
             {
-                ChangeType = "Skill Field",
-                Target = $"Skill {field.Key}",
+                ChangeType = changeType,
+                Target = target,
                 Field = field.Field,
                 Before = field.OldValue?.ToString() ?? string.Empty,
                 After = field.NewValue?.ToString() ?? string.Empty
@@ -1098,6 +1313,7 @@ public partial class MainWindow : Window
 
         await _settingsStore.SaveAsync(_settings);
         EnsureRepository();
+        UpdateStatsButtonState();
         await BuildAssetIndexAsync();
         await LoadSummonsAsync();
     }
