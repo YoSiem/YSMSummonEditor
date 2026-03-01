@@ -69,7 +69,6 @@
                        FontWeight="Bold"
                        Text="Summon Editor" />
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
-                <Button x:Name="BtnSearch" Width="108" Height="32" Margin="0,0,8,0" Content="Search" Click="BtnSearch_Click" />
                 <Button x:Name="BtnSave" Width="108" Height="32" Margin="0,0,8,0" Content="Save" Click="BtnSave_Click" />
                 <Button x:Name="BtnStats" Width="108" Height="32" Margin="0,0,8,0" Content="Stats" Click="BtnStats_Click" IsEnabled="False" />
                 <ToggleButton x:Name="TglSaveMode"
@@ -95,7 +94,6 @@
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
@@ -104,17 +102,11 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <TextBox x:Name="TxtSearch" Height="30" Margin="0,0,8,0" VerticalContentAlignment="Center" ToolTip="Search by summon ID/name/card." />
+                        <TextBox x:Name="TxtSearch" Height="30" Margin="0,0,8,0" VerticalContentAlignment="Center" ToolTip="Search by summon ID/name/card." KeyDown="TxtSearch_KeyDown" />
                         <Button Grid.Column="1" Width="68" Height="30" Content="Go" Click="BtnSearch_Click" />
                     </Grid>
 
-                    <StackPanel Grid.Row="1" Margin="0,0,0,8">
-                        <CheckBox x:Name="ChkIncludeRiding" Margin="0,0,0,4" Content="Riding-only" ToolTip="Include summons marked as riding-only." />
-                        <CheckBox x:Name="ChkIncludeNonForm1" Margin="0,0,0,4" Content="Non-form1" ToolTip="Include summons with form different than 1." />
-                        <CheckBox x:Name="ChkShowAllEvos" Content="All evolutions" ToolTip="Show every evolution stage, not only final evolutions." />
-                    </StackPanel>
-
-                    <ListView x:Name="ListSummons" Grid.Row="2" SelectionChanged="ListSummons_SelectionChanged" AlternationCount="2">
+                    <ListView x:Name="ListSummons" Grid.Row="1" SelectionChanged="ListSummons_SelectionChanged" AlternationCount="2">
                         <ListView.ItemTemplate>
                             <DataTemplate>
                                 <Grid Margin="0,2" ToolTip="{Binding ToolTipText}">

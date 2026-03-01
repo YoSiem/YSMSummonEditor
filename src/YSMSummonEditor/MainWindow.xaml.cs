@@ -29,6 +29,12 @@ namespace YSMSummonEditor;
 
 public partial class MainWindow : Window
 {
+    private enum SaveRequestOrigin
+    {
+        Toolbar,
+        SummonSwitch
+    }
+
     private readonly ISettingsStore _settingsStore;
     private readonly IAssetResolver _assetResolver;
     private readonly SqlConnectionFactory _connectionFactory;
@@ -54,6 +60,9 @@ public partial class MainWindow : Window
     private EvolutionChainSnapshot? _currentChain;
     private string _lastDiffSql = string.Empty;
     private bool _isInitializingSaveModeToggle;
+    private bool _isRestoringSelection;
+    private SummonDisplayItem? _activeSummon;
+    private bool _isLoadingChainForSelection;
 
     public MainWindow(
         ISettingsStore settingsStore,
@@ -109,9 +118,6 @@ public partial class MainWindow : Window
                 : $"{TxtStatus.Text} {dumpDefaultedMessage}";
         }
 
-        ChkIncludeRiding.IsChecked = _settings.IncludeRidingOnlyByDefault;
-        ChkIncludeNonForm1.IsChecked = _settings.IncludeNonForm1ByDefault;
-        ChkShowAllEvos.IsChecked = _settings.ShowAllEvolutionsByDefault;
         ApplySaveModeToggleState(_settings.SaveToSqlMode);
 
         EnsureRepository();
@@ -190,6 +196,17 @@ public partial class MainWindow : Window
         await LoadSummonsAsync();
     }
 
+    private async void TxtSearch_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        await LoadSummonsAsync();
+    }
+
     private async Task LoadSummonsAsync()
     {
         if (_repository is null)
@@ -211,9 +228,9 @@ public partial class MainWindow : Window
 
             var filter = new SummonListFilter(
                 TxtSearch.Text.Trim(),
-                ChkIncludeRiding.IsChecked == true,
-                ChkIncludeNonForm1.IsChecked == true,
-                ChkShowAllEvos.IsChecked == true);
+                IncludeRidingOnly: false,
+                IncludeNonForm1: true,
+                ShowAllEvolutions: true);
 
             var summons = await _repository.SearchSummonsAsync(filter);
             foreach (var summon in summons)
@@ -235,14 +252,64 @@ public partial class MainWindow : Window
 
     private async void ListSummons_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_isRestoringSelection || _isLoadingChainForSelection)
+        {
+            return;
+        }
+
         if (ListSummons.SelectedItem is not SummonDisplayItem selected)
         {
             _currentChain = null;
+            _activeSummon = null;
             UpdateStatsButtonState();
             return;
         }
 
-        await LoadEvolutionChainAndTreesAsync(selected.Summon);
+        var switchingSummon = _activeSummon is not null
+            && selected.Summon.SummonId != _activeSummon.Summon.SummonId;
+
+        if (switchingSummon && HasStagedChanges())
+        {
+            var choice = _dialogService.Show(
+                this,
+                "Unsaved changes",
+                "Current summon has staged changes.\nYes = Save\nNo = Discard\nCancel = Stay on current summon.",
+                DialogButtons.YesNoCancel,
+                defaultResult: AppDialogResult.Cancel);
+
+            if (choice == AppDialogResult.Cancel)
+            {
+                RestoreSummonSelection(_activeSummon);
+                TxtStatus.Text = "Summon switch cancelled.";
+                return;
+            }
+
+            if (choice == AppDialogResult.Yes)
+            {
+                var saveSucceeded = await SaveStagedChangesAsync(SaveRequestOrigin.SummonSwitch);
+                if (!saveSucceeded)
+                {
+                    RestoreSummonSelection(_activeSummon);
+                    return;
+                }
+            }
+            else
+            {
+                ClearStagedChanges();
+                TxtStatus.Text = "Staged changes discarded.";
+            }
+        }
+
+        _isLoadingChainForSelection = true;
+        try
+        {
+            await LoadEvolutionChainAndTreesAsync(selected.Summon);
+            _activeSummon = selected;
+        }
+        finally
+        {
+            _isLoadingChainForSelection = false;
+        }
     }
 
     private async Task LoadEvolutionChainAndTreesAsync(SummonListItem selected)
@@ -255,11 +322,6 @@ public partial class MainWindow : Window
         try
         {
             TxtStatus.Text = "Loading evolution chain...";
-            _pendingSkillUpdates.Clear();
-            _pendingFieldChanges.Clear();
-            _pendingStatContexts.Clear();
-            _pendingCreatureLevelBonusUpdates.Clear();
-            _pendingScalingFieldChanges.Clear();
             _stageStates.Clear();
             _skillDisplay.Clear();
 
@@ -980,9 +1042,45 @@ public partial class MainWindow : Window
 
     private async void BtnSave_Click(object sender, RoutedEventArgs e)
     {
+        _ = await SaveStagedChangesAsync(SaveRequestOrigin.Toolbar);
+    }
+
+    private bool HasStagedChanges()
+    {
+        var commitRequest = BuildCommitRequest(out _);
+        return commitRequest.TreeContexts.Count > 0
+            || commitRequest.SkillUpdates.Count > 0
+            || commitRequest.StatContexts.Count > 0
+            || commitRequest.CreatureLevelBonusUpdates.Count > 0;
+    }
+
+    private void ClearStagedChanges()
+    {
+        _pendingSkillUpdates.Clear();
+        _pendingFieldChanges.Clear();
+        _pendingStatContexts.Clear();
+        _pendingCreatureLevelBonusUpdates.Clear();
+        _pendingScalingFieldChanges.Clear();
+    }
+
+    private void RestoreSummonSelection(SummonDisplayItem? selection)
+    {
+        _isRestoringSelection = true;
+        try
+        {
+            ListSummons.SelectedItem = selection;
+        }
+        finally
+        {
+            _isRestoringSelection = false;
+        }
+    }
+
+    private async Task<bool> SaveStagedChangesAsync(SaveRequestOrigin origin)
+    {
         if (_repository is null)
         {
-            return;
+            return false;
         }
 
         try
@@ -993,14 +1091,18 @@ public partial class MainWindow : Window
                 && commitRequest.StatContexts.Count == 0
                 && commitRequest.CreatureLevelBonusUpdates.Count == 0)
             {
-                _dialogService.Show(this, "Save", "No changes to save.");
-                return;
+                if (origin == SaveRequestOrigin.Toolbar)
+                {
+                    _dialogService.Show(this, "Save", "No changes to save.");
+                }
+
+                return true;
             }
 
             var adjustedRequest = await ApplyWarningsAndCloneFlagsAsync(commitRequest);
             if (adjustedRequest is null)
             {
-                return;
+                return false;
             }
 
             var allFieldChanges = _pendingFieldChanges
@@ -1010,7 +1112,7 @@ public partial class MainWindow : Window
             var reviewWindow = new SaveReviewWindow(reviewRows) { Owner = this };
             if (reviewWindow.ShowDialog() != true)
             {
-                return;
+                return false;
             }
 
             if (_settings.SaveToSqlMode)
@@ -1023,44 +1125,53 @@ public partial class MainWindow : Window
 
                 if (saveDialog.ShowDialog(this) != true)
                 {
-                    return;
+                    return false;
                 }
 
                 var diffSql = DiffSqlRenderer.Render(adjustedRequest);
                 File.WriteAllText(saveDialog.FileName, diffSql);
                 _lastDiffSql = diffSql;
-                TxtStatus.Text = $"SQL diff saved: {saveDialog.FileName}. Pending changes remain staged.";
+
+                if (origin == SaveRequestOrigin.SummonSwitch)
+                {
+                    ClearStagedChanges();
+                    TxtStatus.Text = $"SQL diff saved: {saveDialog.FileName}. Staged changes cleared for summon switch.";
+                }
+                else
+                {
+                    TxtStatus.Text = $"SQL diff saved: {saveDialog.FileName}. Pending changes remain staged.";
+                }
+
                 _dialogService.Show(this, "Save", "SQL file generated. No database write was performed.");
-                return;
+                return true;
             }
 
             if (!ConfirmDatabaseSave(adjustedRequest))
             {
-                return;
+                return false;
             }
 
             TxtStatus.Text = "Saving changes to database...";
             var result = await _repository.CommitAsync(adjustedRequest);
             _lastDiffSql = result.DiffSql;
 
-            _pendingSkillUpdates.Clear();
-            _pendingFieldChanges.Clear();
-            _pendingStatContexts.Clear();
-            _pendingCreatureLevelBonusUpdates.Clear();
-            _pendingScalingFieldChanges.Clear();
+            ClearStagedChanges();
 
-            if (ListSummons.SelectedItem is SummonDisplayItem selected)
+            if (origin == SaveRequestOrigin.Toolbar && ListSummons.SelectedItem is SummonDisplayItem selected)
             {
                 await LoadEvolutionChainAndTreesAsync(selected.Summon);
+                _activeSummon = selected;
             }
 
             TxtStatus.Text = $"Saved trees: {result.UpdatedTreeCount}, skills: {result.UpdatedSkillCount}.";
             _dialogService.Show(this, "Save", "Changes saved successfully.");
+            return true;
         }
         catch (Exception ex)
         {
             _dialogService.Show(this, "Save failed", "Could not save staged changes.", DialogButtons.Ok, ex.Message);
             TxtStatus.Text = "Save failed (see details).";
+            return false;
         }
     }
 
@@ -1391,9 +1502,6 @@ public partial class MainWindow : Window
         }
 
         _settings = dialog.ResultSettings;
-        _settings.IncludeRidingOnlyByDefault = ChkIncludeRiding.IsChecked == true;
-        _settings.IncludeNonForm1ByDefault = ChkIncludeNonForm1.IsChecked == true;
-        _settings.ShowAllEvolutionsByDefault = ChkShowAllEvos.IsChecked == true;
         _settings.SaveToSqlMode = TglSaveMode.IsChecked == true;
         ApplySaveModeToggleState(_settings.SaveToSqlMode);
 
