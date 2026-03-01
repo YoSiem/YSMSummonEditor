@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
+using System.Text.RegularExpressions;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
@@ -40,7 +41,7 @@ public partial class MainWindow : Window
 
     private readonly Dictionary<int, SkillUpdate> _pendingSkillUpdates = new();
     private readonly List<PendingFieldChange> _pendingFieldChanges = [];
-    private readonly Dictionary<int, string> _skillNames = new();
+    private readonly Dictionary<int, SkillDisplaySnapshot> _skillDisplay = new();
 
     private SummonEditorSettings _settings = new();
     private ISummonEditorRepository? _repository;
@@ -207,7 +208,7 @@ public partial class MainWindow : Window
             _pendingSkillUpdates.Clear();
             _pendingFieldChanges.Clear();
             _stageStates.Clear();
-            _skillNames.Clear();
+            _skillDisplay.Clear();
 
             var final = await ResolveFinalEvolutionAsync(selected);
             var sameCard = await _repository.GetSummonsByCardIdAsync(final.CardId);
@@ -217,7 +218,7 @@ public partial class MainWindow : Window
             await BuildStageStateAsync(2, _currentChain.Stage2);
             await BuildStageStateAsync(3, _currentChain.Stage3);
 
-            await PopulateSkillNamesAsync();
+            await PopulateSkillDisplayAsync();
             BuildEffectiveMatrix();
             BindStageTabs();
             UpdateHeader(final);
@@ -294,7 +295,7 @@ public partial class MainWindow : Window
         });
     }
 
-    private async Task PopulateSkillNamesAsync()
+    private async Task PopulateSkillDisplayAsync()
     {
         if (_repository is null)
         {
@@ -314,18 +315,43 @@ public partial class MainWindow : Window
             return;
         }
 
-        var names = await _repository.GetSkillNamesAsync(skillIds);
-        foreach (var pair in names)
+        var displayRows = await _repository.GetSkillDisplayAsync(skillIds);
+        foreach (var pair in displayRows)
         {
-            _skillNames[pair.Key] = pair.Value;
+            _skillDisplay[pair.Key] = pair.Value;
         }
 
         foreach (var row in _stageStates.SelectMany(x => x.Trees).SelectMany(x => x.CurrentEntries))
         {
-            row.SkillName = _skillNames.TryGetValue(row.SkillId, out var name)
-                ? name
-                : $"Skill {row.SkillId}";
+            if (_skillDisplay.TryGetValue(row.SkillId, out var display))
+            {
+                row.SkillName = display.SkillName;
+                row.SkillTooltipMarkup = display.TooltipMarkup ?? string.Empty;
+                row.SkillTooltipPlain = BuildSkillTooltipPlain(display.TooltipMarkup, row.SkillId, display.SkillName);
+                row.SkillIcon = ImageLoader.TryLoad(_assetResolver.ResolveSkillIcon(display.IconFileName));
+            }
+            else
+            {
+                row.SkillName = $"Skill {row.SkillId}";
+                row.SkillTooltipMarkup = string.Empty;
+                row.SkillTooltipPlain = $"Skill {row.SkillId}";
+                row.SkillIcon = null;
+            }
         }
+    }
+
+    private static string BuildSkillTooltipPlain(string? markup, int skillId, string skillName)
+    {
+        if (string.IsNullOrWhiteSpace(markup))
+        {
+            return $"Skill {skillId} | {skillName}";
+        }
+
+        var plain = Regex.Replace(markup, "<[^>]+>", string.Empty, RegexOptions.CultureInvariant);
+        plain = plain.Replace("\r", string.Empty).Trim();
+        return string.IsNullOrWhiteSpace(plain)
+            ? $"Skill {skillId} | {skillName}"
+            : plain;
     }
 
     private void BuildEffectiveMatrix()
@@ -934,7 +960,7 @@ public partial class MainWindow : Window
 
     private async Task RefreshSkillNamesAndEffectiveAsync()
     {
-        await PopulateSkillNamesAsync();
+        await PopulateSkillDisplayAsync();
         BuildEffectiveMatrix();
     }
 

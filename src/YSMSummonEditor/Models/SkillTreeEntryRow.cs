@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using YSMLib.GameData.Abstractions.Models;
+using System.Windows.Media.Imaging;
 
 namespace YSMSummonEditor.Models;
 
@@ -74,11 +75,23 @@ public sealed partial class SkillTreeEntryRow : ObservableObject
     private string _skillName = string.Empty;
 
     [ObservableProperty]
+    private BitmapImage? _skillIcon;
+
+    [ObservableProperty]
+    private string _skillTooltipMarkup = string.Empty;
+
+    [ObservableProperty]
+    private string _skillTooltipPlain = string.Empty;
+
+    [ObservableProperty]
     private bool _isDirty;
 
     public bool IsNew { get; }
 
-    public string ToolTipText => $"Skill {SkillId} | {SkillName} | Lv {Lv} | Min {MinSkillLv} | Max {MaxSkillLv}";
+    public string ToolTipText =>
+        string.IsNullOrWhiteSpace(SkillTooltipPlain)
+            ? $"Skill {SkillId} | {SkillName} | Lv {Lv} | Min {MinSkillLv} | Max {MaxSkillLv}"
+            : SkillTooltipPlain;
 
     public SkillTreeEntrySnapshot ToSnapshot(int skillTreeId)
     {
@@ -122,4 +135,5 @@ public sealed partial class SkillTreeEntryRow : ObservableObject
     partial void OnCEnhanceMinChanged(int value) => RecalculateDirty();
     partial void OnCEnhanceMaxChanged(int value) => RecalculateDirty();
     partial void OnSkillNameChanged(string value) => OnPropertyChanged(nameof(ToolTipText));
+    partial void OnSkillTooltipPlainChanged(string value) => OnPropertyChanged(nameof(ToolTipText));
 }

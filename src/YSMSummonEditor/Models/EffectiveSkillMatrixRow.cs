@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using System.Windows.Media.Imaging;
 
 namespace YSMSummonEditor.Models;
 
@@ -22,6 +23,15 @@ public sealed partial class EffectiveSkillMatrixRow : ObservableObject
 
     [ObservableProperty]
     private string _skillName = string.Empty;
+
+    [ObservableProperty]
+    private BitmapImage? _skillIcon;
+
+    [ObservableProperty]
+    private string _skillTooltipMarkup = string.Empty;
+
+    [ObservableProperty]
+    private string _skillTooltipPlain = string.Empty;
 
     [ObservableProperty]
     private bool _isDirty;
@@ -66,7 +76,10 @@ public sealed partial class EffectiveSkillMatrixRow : ObservableObject
         set => SetStageMax(3, value);
     }
 
-    public string ToolTipText => $"Tree {TreeSlotIndex}, Skill {SkillId}, Lv {Level}";
+    public string ToolTipText =>
+        string.IsNullOrWhiteSpace(SkillTooltipPlain)
+            ? $"Tree {TreeSlotIndex}, Skill {SkillId}, Lv {Level}"
+            : SkillTooltipPlain;
 
     public int FirstAvailableStage =>
         E1Available ? 1 :
@@ -185,6 +198,17 @@ public sealed partial class EffectiveSkillMatrixRow : ObservableObject
             ?? _stage3Entry?.SkillName
             ?? $"Skill {SkillId}";
 
+        SkillIcon = _stage1Entry?.SkillIcon
+            ?? _stage2Entry?.SkillIcon
+            ?? _stage3Entry?.SkillIcon;
+        SkillTooltipMarkup = _stage1Entry?.SkillTooltipMarkup
+            ?? _stage2Entry?.SkillTooltipMarkup
+            ?? _stage3Entry?.SkillTooltipMarkup
+            ?? string.Empty;
+        SkillTooltipPlain = _stage1Entry?.SkillTooltipPlain
+            ?? _stage2Entry?.SkillTooltipPlain
+            ?? _stage3Entry?.SkillTooltipPlain
+            ?? string.Empty;
         SkillName = resolvedName;
         IsDirty = (_stage1Entry?.IsDirty ?? false)
             || (_stage2Entry?.IsDirty ?? false)
