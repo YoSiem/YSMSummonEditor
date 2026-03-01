@@ -4,8 +4,9 @@
         Title="Edit Skill"
         Height="700"
         Width="980"
-        WindowStartupLocation="CenterOwner">
-    <Grid Margin="14">
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource WindowBgBrush}">
+    <Grid Margin="14" Background="{DynamicResource WindowBgBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -27,8 +28,8 @@
                       IsReadOnly="False">
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="Field" Binding="{Binding Name}" IsReadOnly="True" Width="280" />
-                    <DataGridTextColumn Header="Original" Binding="{Binding OriginalValue}" IsReadOnly="True" Width="220" />
-                    <DataGridTextColumn Header="Current" Binding="{Binding CurrentValue, UpdateSourceTrigger=PropertyChanged}" Width="220" />
+                    <DataGridTextColumn Header="Orig" Binding="{Binding OriginalValue}" IsReadOnly="True" Width="220" />
+                    <DataGridTextColumn Header="Cur" Binding="{Binding CurrentValue, UpdateSourceTrigger=PropertyChanged}" Width="220" />
                     <DataGridCheckBoxColumn Header="Dirty" Binding="{Binding IsDirty}" IsReadOnly="True" Width="80" />
                 </DataGrid.Columns>
             </DataGrid>
@@ -42,8 +43,8 @@
                       IsReadOnly="False">
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="Field" Binding="{Binding Name}" IsReadOnly="True" Width="260" />
-                    <DataGridTextColumn Header="Original" Binding="{Binding OriginalValue}" IsReadOnly="True" Width="210" />
-                    <DataGridTextColumn Header="Current" Binding="{Binding CurrentValue, UpdateSourceTrigger=PropertyChanged}" Width="210" />
+                    <DataGridTextColumn Header="Orig" Binding="{Binding OriginalValue}" IsReadOnly="True" Width="210" />
+                    <DataGridTextColumn Header="Cur" Binding="{Binding CurrentValue, UpdateSourceTrigger=PropertyChanged}" Width="210" />
                     <DataGridCheckBoxColumn Header="Dirty" Binding="{Binding IsDirty}" IsReadOnly="True" Width="80" />
                 </DataGrid.Columns>
             </DataGrid>

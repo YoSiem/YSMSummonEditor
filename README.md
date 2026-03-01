@@ -31,6 +31,7 @@ dotnet test YSMSummonEditor.slnx -c Release
 ## Runtime
 
 Settings are stored in `%LocalAppData%\YSMSummonEditor\settings.json`.
+Local DB bootstrap can be provided via `.env.local` (see `.env.local.template`).
 
 ## Publish
 

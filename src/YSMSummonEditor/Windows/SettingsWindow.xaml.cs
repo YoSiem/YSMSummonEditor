@@ -1,16 +1,19 @@
 using System.Globalization;
 using System.Windows;
 using YSMLib.AppSettings.Models;
+using YSMSummonEditor.Services;
 
 namespace YSMSummonEditor.Windows;
 
 public partial class SettingsWindow : Window
 {
     private readonly SummonEditorSettings _working;
+    private readonly IAppDialogService _dialogService;
 
-    public SettingsWindow(SummonEditorSettings current)
+    public SettingsWindow(SummonEditorSettings current, IAppDialogService dialogService)
     {
         InitializeComponent();
+        _dialogService = dialogService;
         _working = Clone(current);
 
         TxtServer.Text = _working.Database.Server;
@@ -19,7 +22,7 @@ public partial class SettingsWindow : Window
         TxtUser.Text = _working.Database.UserId;
         TxtPassword.Password = _working.Database.Password;
         TxtDumpFolder.Text = _working.DumpFolderPath;
-        TglTrustServerCertificate.IsOn = _working.Database.TrustServerCertificate;
+        ChkTrustServerCertificate.IsChecked = _working.Database.TrustServerCertificate;
     }
 
     public SummonEditorSettings ResultSettings => _working;
@@ -41,7 +44,7 @@ public partial class SettingsWindow : Window
     {
         if (!int.TryParse(TxtPort.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var port))
         {
-            MessageBox.Show(this, "Port must be a number.", "Validation", MessageBoxButton.OK, MessageBoxImage.Warning);
+            _dialogService.Show(this, "Validation", "Port must be a number.");
             return;
         }
 
@@ -50,14 +53,14 @@ public partial class SettingsWindow : Window
         _working.Database.Database = TxtDatabase.Text.Trim();
         _working.Database.UserId = TxtUser.Text.Trim();
         _working.Database.Password = TxtPassword.Password;
-        _working.Database.TrustServerCertificate = TglTrustServerCertificate.IsOn;
+        _working.Database.TrustServerCertificate = ChkTrustServerCertificate.IsChecked == true;
         _working.DumpFolderPath = TxtDumpFolder.Text.Trim();
 
         if (string.IsNullOrWhiteSpace(_working.Database.Server)
             || string.IsNullOrWhiteSpace(_working.Database.Database)
             || string.IsNullOrWhiteSpace(_working.Database.UserId))
         {
-            MessageBox.Show(this, "Server, Database and User ID are required.", "Validation", MessageBoxButton.OK, MessageBoxImage.Warning);
+            _dialogService.Show(this, "Validation", "Server, Database and User ID are required.");
             return;
         }
 

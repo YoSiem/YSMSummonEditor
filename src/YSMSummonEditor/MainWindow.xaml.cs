@@ -5,6 +5,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using Microsoft.Win32;
 using YSMLib.AppSettings;
 using YSMLib.AppSettings.Models;
@@ -19,7 +20,9 @@ using YSMLib.GameData.SqlServer.Infrastructure;
 using YSMSummonEditor.Core.Services;
 using YSMSummonEditor.Helpers;
 using YSMSummonEditor.Models;
+using YSMSummonEditor.Services;
 using YSMSummonEditor.Windows;
+using AppDialogResult = YSMSummonEditor.Services.DialogResult;
 
 namespace YSMSummonEditor;
 
@@ -29,9 +32,10 @@ public partial class MainWindow : Window
     private readonly IAssetResolver _assetResolver;
     private readonly SqlConnectionFactory _connectionFactory;
     private readonly ISkillUpdateBuilder _skillUpdateBuilder;
+    private readonly IAppDialogService _dialogService;
 
     private readonly ObservableCollection<SummonDisplayItem> _summonItems = [];
-    private readonly ObservableCollection<EffectiveSkillRow> _effectiveRows = [];
+    private readonly ObservableCollection<EffectiveSkillMatrixRow> _effectiveRows = [];
     private readonly List<StageViewState> _stageStates = [];
 
     private readonly Dictionary<int, SkillUpdate> _pendingSkillUpdates = new();
@@ -42,17 +46,20 @@ public partial class MainWindow : Window
     private ISummonEditorRepository? _repository;
     private EvolutionChainSnapshot? _currentChain;
     private string _lastDiffSql = string.Empty;
+    private int _effectiveContextStage;
 
     public MainWindow(
         ISettingsStore settingsStore,
         IAssetResolver assetResolver,
         SqlConnectionFactory connectionFactory,
-        ISkillUpdateBuilder skillUpdateBuilder)
+        ISkillUpdateBuilder skillUpdateBuilder,
+        IAppDialogService dialogService)
     {
         _settingsStore = settingsStore;
         _assetResolver = assetResolver;
         _connectionFactory = connectionFactory;
         _skillUpdateBuilder = skillUpdateBuilder;
+        _dialogService = dialogService;
 
         InitializeComponent();
 
@@ -77,17 +84,33 @@ public partial class MainWindow : Window
             _settings.Database.Port = 1433;
         }
 
-        TglIncludeRiding.IsOn = _settings.IncludeRidingOnlyByDefault;
-        TglIncludeNonForm1.IsOn = _settings.IncludeNonForm1ByDefault;
-        TglShowAllEvos.IsOn = _settings.ShowAllEvolutionsByDefault;
+        if (!IsDatabaseConfigured(_settings.Database)
+            && LocalEnvConnectionLoader.TryLoadDbSettings(out var localDb, out var localEnvPath))
+        {
+            _settings.Database = localDb;
+            TxtStatus.Text = $"Loaded DB defaults from {Path.GetFileName(localEnvPath)}.";
+        }
+
+        ChkIncludeRiding.IsChecked = _settings.IncludeRidingOnlyByDefault;
+        ChkIncludeNonForm1.IsChecked = _settings.IncludeNonForm1ByDefault;
+        ChkShowAllEvos.IsChecked = _settings.ShowAllEvolutionsByDefault;
+
         EnsureRepository();
+        if (_repository is null)
+        {
+            TxtStatus.Text = "Database is not configured. Add .env.local or set values in Settings.";
+        }
     }
 
     private async Task BuildAssetIndexAsync()
     {
         if (string.IsNullOrWhiteSpace(_settings.DumpFolderPath))
         {
-            TxtStatus.Text = "Dump folder is not configured.";
+            if (string.IsNullOrWhiteSpace(TxtStatus.Text))
+            {
+                TxtStatus.Text = "Dump folder is not configured.";
+            }
+
             return;
         }
 
@@ -97,8 +120,20 @@ public partial class MainWindow : Window
 
     private void EnsureRepository()
     {
-        var conn = _settings.Database.ToConnectionString();
-        _repository = new SqlServerSummonEditorRepository(conn, _connectionFactory);
+        if (!IsDatabaseConfigured(_settings.Database))
+        {
+            _repository = null;
+            return;
+        }
+
+        _repository = new SqlServerSummonEditorRepository(_settings.Database.ToConnectionString(), _connectionFactory);
+    }
+
+    private static bool IsDatabaseConfigured(DbConnectionSettings settings)
+    {
+        return !string.IsNullOrWhiteSpace(settings.Server)
+            && !string.IsNullOrWhiteSpace(settings.Database)
+            && !string.IsNullOrWhiteSpace(settings.UserId);
     }
 
     private async void BtnSearch_Click(object sender, RoutedEventArgs e)
@@ -113,6 +148,13 @@ public partial class MainWindow : Window
             EnsureRepository();
         }
 
+        if (_repository is null)
+        {
+            _dialogService.Show(this, "Database", "Configure database connection first.");
+            TxtStatus.Text = "Search skipped. Database is not configured.";
+            return;
+        }
+
         try
         {
             TxtStatus.Text = "Loading summons...";
@@ -120,24 +162,25 @@ public partial class MainWindow : Window
 
             var filter = new SummonListFilter(
                 TxtSearch.Text.Trim(),
-                TglIncludeRiding.IsOn,
-                TglIncludeNonForm1.IsOn,
-                TglShowAllEvos.IsOn);
+                ChkIncludeRiding.IsChecked == true,
+                ChkIncludeNonForm1.IsChecked == true,
+                ChkShowAllEvos.IsChecked == true);
 
-            var summons = await _repository!.SearchSummonsAsync(filter);
+            var summons = await _repository.SearchSummonsAsync(filter);
             foreach (var summon in summons)
             {
-                var item = new SummonDisplayItem(summon);
-                item.Icon = ImageLoader.TryLoad(_assetResolver.ResolveSummonFace(summon.FaceFileName));
-                _summonItems.Add(item);
+                _summonItems.Add(new SummonDisplayItem(summon)
+                {
+                    Icon = ImageLoader.TryLoad(_assetResolver.ResolveSummonFace(summon.FaceFileName))
+                });
             }
 
             TxtStatus.Text = $"Loaded {_summonItems.Count.ToString("N0", CultureInfo.InvariantCulture)} summons.";
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Search failed", MessageBoxButton.OK, MessageBoxImage.Error);
-            TxtStatus.Text = "Search failed.";
+            _dialogService.Show(this, "Search failed", "Search query failed.", DialogButtons.Ok, ex.Message);
+            TxtStatus.Text = "Search failed (see details).";
         }
     }
 
@@ -175,7 +218,7 @@ public partial class MainWindow : Window
             await BuildStageStateAsync(3, _currentChain.Stage3);
 
             await PopulateSkillNamesAsync();
-            BuildEffectiveSkills();
+            BuildEffectiveMatrix();
             BindStageTabs();
             UpdateHeader(final);
 
@@ -183,8 +226,8 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Chain load failed", MessageBoxButton.OK, MessageBoxImage.Warning);
-            TxtStatus.Text = "Chain load failed.";
+            _dialogService.Show(this, "Chain load failed", "Could not load evolution chain.", DialogButtons.Ok, ex.Message);
+            TxtStatus.Text = "Chain load failed (see details).";
         }
     }
 
@@ -220,7 +263,6 @@ public partial class MainWindow : Window
     private async Task BuildStageStateAsync(int stageIndex, SummonListItem? summon)
     {
         var trees = new List<TreeContextState>();
-
         if (summon is not null)
         {
             var ids = new[] { summon.SkillTree1Id, summon.SkillTree2Id, summon.SkillTree3Id, summon.SkillTree4Id, summon.SkillTree5Id };
@@ -286,26 +328,32 @@ public partial class MainWindow : Window
         }
     }
 
-    private void BuildEffectiveSkills()
+    private void BuildEffectiveMatrix()
     {
         _effectiveRows.Clear();
+
+        var map = new Dictionary<string, EffectiveSkillMatrixRow>(StringComparer.Ordinal);
         foreach (var stage in _stageStates)
         {
             foreach (var tree in stage.Trees)
             {
-                foreach (var row in tree.CurrentEntries)
+                foreach (var entry in tree.CurrentEntries)
                 {
-                    _effectiveRows.Add(new EffectiveSkillRow
+                    var key = $"{tree.TreeSlotIndex}:{entry.SkillId}:{entry.Lv}";
+                    if (!map.TryGetValue(key, out var row))
                     {
-                        StageIndex = stage.StageIndex,
-                        TreeSlotIndex = tree.TreeSlotIndex,
-                        SkillId = row.SkillId,
-                        SkillName = row.SkillName,
-                        MinSkillLevel = row.MinSkillLv,
-                        MaxSkillLevel = row.MaxSkillLv
-                    });
+                        row = new EffectiveSkillMatrixRow(tree.TreeSlotIndex, entry.SkillId, entry.Lv);
+                        map[key] = row;
+                    }
+
+                    row.AttachStageEntry(stage.StageIndex, entry);
                 }
             }
+        }
+
+        foreach (var row in map.Values.OrderBy(x => x.TreeSlotIndex).ThenBy(x => x.SkillId).ThenBy(x => x.Level))
+        {
+            _effectiveRows.Add(row);
         }
     }
 
@@ -314,12 +362,12 @@ public partial class MainWindow : Window
         TabStages.Items.Clear();
         foreach (var stage in _stageStates)
         {
-            var item = new TabItem
+            TabStages.Items.Add(new TabItem
             {
                 Header = stage.Name,
-                Tag = stage
-            };
-            TabStages.Items.Add(item);
+                Tag = stage,
+                ToolTip = $"Skills shown for {stage.Name}"
+            });
         }
 
         if (TabStages.Items.Count > 0)
@@ -344,11 +392,12 @@ public partial class MainWindow : Window
 
     private void UpdateHeader(SummonListItem final)
     {
-        TxtSummonHeader.Text = $"{final.SummonName} ({final.SummonId})";
-        TxtSummonMeta.Text = $"Card: {final.CardName ?? "Unknown"} / Card ID: {final.CardId}";
-        TxtChainInfo.Text = _currentChain is null
-            ? string.Empty
-            : $"Chain IDs: {FormatChainIds(_currentChain)}";
+        TxtSummonHeader.Text = final.SummonName;
+        TxtSummonHeader.ToolTip = $"{final.SummonName} ({final.SummonId})";
+        TxtSummonMeta.Text = $"ID: {final.SummonId} | Card: {final.CardId}";
+        TxtSummonMeta.ToolTip = $"Card: {final.CardName ?? "Unknown"} ({final.CardId})";
+        TxtChainInfo.Text = _currentChain is null ? string.Empty : $"Chain: {FormatChainIds(_currentChain)}";
+        TxtChainInfo.ToolTip = "Resolved stages from the selected final evolution.";
 
         var large = _assetResolver.ResolveSummonIllust(final.IllustFileName);
         ImgLarge.Source = ImageLoader.TryLoad(large);
@@ -360,15 +409,11 @@ public partial class MainWindow : Window
         return string.Join(" -> ", ids);
     }
 
-    private TreeContextState? GetSelectedTree()
-    {
-        return TabTrees.SelectedItem as TreeContextState;
-    }
+    private TreeContextState? GetSelectedTree() => TabTrees.SelectedItem as TreeContextState;
 
-    private async void BtnAddTreeEntry_Click(object sender, RoutedEventArgs e)
+    private async Task AddTreeEntryAsync(TreeContextState tree)
     {
-        var tree = GetSelectedTree();
-        if (tree is null || tree.OriginalSkillTreeId <= 0)
+        if (tree.OriginalSkillTreeId <= 0)
         {
             return;
         }
@@ -383,26 +428,39 @@ public partial class MainWindow : Window
         await RefreshSkillNamesAndEffectiveAsync();
     }
 
-    private async void BtnDeleteTreeEntry_Click(object sender, RoutedEventArgs e)
+    private async Task DeleteTreeEntryAsync(TreeContextState tree, SkillTreeEntryRow row)
     {
-        var tree = GetSelectedTree();
-        if (tree?.SelectedEntry is null)
+        var confirm = _dialogService.Show(
+            this,
+            "Confirm delete",
+            $"Delete skill {row.SkillId} from Evo {tree.StageIndex}, Tree {tree.TreeSlotIndex}?",
+            DialogButtons.YesNo,
+            defaultResult: AppDialogResult.No);
+
+        if (confirm != AppDialogResult.Yes)
         {
             return;
         }
 
-        tree.CurrentEntries.Remove(tree.SelectedEntry);
+        tree.CurrentEntries.Remove(row);
         await RefreshSkillNamesAndEffectiveAsync();
     }
 
-    private async void GridTree_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    private void GridTree_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if ((sender as DataGrid)?.SelectedItem is not SkillTreeEntryRow row || row.SkillId <= 0 || _repository is null)
+        if (sender is not DataGrid grid)
         {
             return;
         }
 
-        await OpenSkillEditDialogAsync(row.SkillId);
+        var row = FindVisualParent<DataGridRow>(e.OriginalSource as DependencyObject);
+        if (row?.Item is not SkillTreeEntryRow item)
+        {
+            return;
+        }
+
+        grid.SelectedItem = item;
+        row.IsSelected = true;
     }
 
     private async void GridTree_CellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
@@ -415,14 +473,173 @@ public partial class MainWindow : Window
         await RefreshSkillNamesAndEffectiveAsync();
     }
 
-    private async void GridEffective_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    private void TreeContextMenu_Opened(object sender, RoutedEventArgs e)
     {
-        if ((sender as DataGrid)?.SelectedItem is not EffectiveSkillRow row || row.SkillId <= 0 || _repository is null)
+        if (sender is not ContextMenu menu)
+        {
+            return;
+        }
+
+        var tree = GetSelectedTree();
+        var row = tree?.SelectedEntry;
+
+        if (menu.Items.Count > 0 && menu.Items[0] is MenuItem add)
+        {
+            add.IsEnabled = tree is { OriginalSkillTreeId: > 0 };
+        }
+
+        if (menu.Items.Count > 1 && menu.Items[1] is MenuItem edit)
+        {
+            edit.IsEnabled = row is { SkillId: > 0 };
+        }
+
+        if (menu.Items.Count > 2 && menu.Items[2] is MenuItem delete)
+        {
+            delete.IsEnabled = row is not null;
+        }
+    }
+
+    private async void MnuTreeAddRow_Click(object sender, RoutedEventArgs e)
+    {
+        var tree = GetSelectedTree();
+        if (tree is null)
+        {
+            return;
+        }
+
+        await AddTreeEntryAsync(tree);
+    }
+
+    private async void MnuTreeEditSkill_Click(object sender, RoutedEventArgs e)
+    {
+        var tree = GetSelectedTree();
+        if (tree?.SelectedEntry is not { SkillId: > 0 } row)
         {
             return;
         }
 
         await OpenSkillEditDialogAsync(row.SkillId);
+    }
+
+    private async void MnuTreeDeleteRow_Click(object sender, RoutedEventArgs e)
+    {
+        var tree = GetSelectedTree();
+        if (tree?.SelectedEntry is not SkillTreeEntryRow row)
+        {
+            return;
+        }
+
+        await DeleteTreeEntryAsync(tree, row);
+    }
+
+    private void GridEffective_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not DataGrid grid)
+        {
+            return;
+        }
+
+        var row = FindVisualParent<DataGridRow>(e.OriginalSource as DependencyObject);
+        var cell = FindVisualParent<DataGridCell>(e.OriginalSource as DependencyObject);
+        if (row?.Item is EffectiveSkillMatrixRow matrixRow)
+        {
+            grid.SelectedItem = matrixRow;
+            row.IsSelected = true;
+            _effectiveContextStage = ResolveStageFromEffectiveColumn(cell?.Column);
+        }
+        else
+        {
+            _effectiveContextStage = 0;
+        }
+    }
+
+    private void EffectiveContextMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ContextMenu menu)
+        {
+            return;
+        }
+
+        var row = GridEffective.SelectedItem as EffectiveSkillMatrixRow;
+        var stage = row is null ? 0 : ResolveEffectiveActionStage(row);
+
+        if (menu.Items.Count > 0 && menu.Items[0] is MenuItem edit)
+        {
+            edit.IsEnabled = row is { SkillId: > 0 };
+        }
+
+        if (menu.Items.Count > 1 && menu.Items[1] is MenuItem delete)
+        {
+            delete.IsEnabled = row is not null && stage > 0 && row.TryGetEntry(stage, out _);
+        }
+    }
+
+    private int ResolveEffectiveActionStage(EffectiveSkillMatrixRow row)
+    {
+        return _effectiveContextStage is >= 1 and <= 3
+            ? _effectiveContextStage
+            : row.FirstAvailableStage;
+    }
+
+    private static int ResolveStageFromEffectiveColumn(DataGridColumn? column)
+    {
+        if (column is null)
+        {
+            return 0;
+        }
+
+        return column.DisplayIndex switch
+        {
+            4 or 5 => 1,
+            6 or 7 => 2,
+            8 or 9 => 3,
+            _ => 0
+        };
+    }
+
+    private TreeContextState? FindTreeByStageAndSlot(int stageIndex, int treeSlotIndex)
+    {
+        return _stageStates.FirstOrDefault(x => x.StageIndex == stageIndex)?.Trees.FirstOrDefault(x => x.TreeSlotIndex == treeSlotIndex);
+    }
+
+    private async void MnuEffectiveEditSkill_Click(object sender, RoutedEventArgs e)
+    {
+        if (GridEffective.SelectedItem is not EffectiveSkillMatrixRow row || row.SkillId <= 0)
+        {
+            return;
+        }
+
+        await OpenSkillEditDialogAsync(row.SkillId);
+    }
+
+    private async void MnuEffectiveDeleteRow_Click(object sender, RoutedEventArgs e)
+    {
+        if (GridEffective.SelectedItem is not EffectiveSkillMatrixRow row)
+        {
+            return;
+        }
+
+        var stage = ResolveEffectiveActionStage(row);
+        if (stage <= 0 || !row.TryGetEntry(stage, out var treeRow) || treeRow is null)
+        {
+            return;
+        }
+
+        var tree = FindTreeByStageAndSlot(stage, row.TreeSlotIndex);
+        if (tree is null)
+        {
+            return;
+        }
+
+        await DeleteTreeEntryAsync(tree, treeRow);
+    }
+
+    private void GridEffective_CellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
+    {
+        if (e.EditAction == DataGridEditAction.Commit)
+        {
+            TxtStatus.Text = "Matrix change staged.";
+        }
     }
 
     private async Task OpenSkillEditDialogAsync(int skillId)
@@ -457,7 +674,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Skill edit failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            _dialogService.Show(this, "Skill edit failed", "Could not open skill editor.", DialogButtons.Ok, ex.Message);
         }
     }
 
@@ -473,7 +690,7 @@ public partial class MainWindow : Window
             var commitRequest = BuildCommitRequest(out var treeReviewChanges);
             if (commitRequest.TreeContexts.Count == 0 && commitRequest.SkillUpdates.Count == 0)
             {
-                MessageBox.Show(this, "No changes to save.", "Save", MessageBoxButton.OK, MessageBoxImage.Information);
+                _dialogService.Show(this, "Save", "No changes to save.");
                 return;
             }
 
@@ -503,12 +720,12 @@ public partial class MainWindow : Window
             }
 
             TxtStatus.Text = $"Saved trees: {result.UpdatedTreeCount}, skills: {result.UpdatedSkillCount}.";
-            MessageBox.Show(this, "Changes saved successfully.", "Save", MessageBoxButton.OK, MessageBoxImage.Information);
+            _dialogService.Show(this, "Save", "Changes saved successfully.");
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Save failed", MessageBoxButton.OK, MessageBoxImage.Error);
-            TxtStatus.Text = "Save failed.";
+            _dialogService.Show(this, "Save failed", "Could not save staged changes.", DialogButtons.Ok, ex.Message);
+            TxtStatus.Text = "Save failed (see details).";
         }
     }
 
@@ -532,13 +749,7 @@ public partial class MainWindow : Window
             }
 
             BuildTreeDiffRows(tree, original, current, treeChanges);
-
-            treeContexts.Add(new SkillTreeContext(
-                tree.SummonId,
-                tree.TreeSlotIndex,
-                tree.OriginalSkillTreeId,
-                current,
-                tree.CloneIfShared));
+            treeContexts.Add(new SkillTreeContext(tree.SummonId, tree.TreeSlotIndex, tree.OriginalSkillTreeId, current, tree.CloneIfShared));
         }
 
         return new CommitRequest(treeContexts, _pendingSkillUpdates.Values.ToList());
@@ -576,37 +787,19 @@ public partial class MainWindow : Window
 
             if (hasBefore && !hasAfter)
             {
-                output.Add(new PendingTreeEntryChange(
-                    TreeChangeType.Delete,
-                    tree.OriginalSkillTreeId,
-                    original[i].SkillId,
-                    $"Stage {tree.StageIndex} Tree {tree.TreeSlotIndex}",
-                    SnapshotToDictionary(original[i]),
-                    null));
+                output.Add(new PendingTreeEntryChange(TreeChangeType.Delete, tree.OriginalSkillTreeId, original[i].SkillId, $"Evo {tree.StageIndex} Tree {tree.TreeSlotIndex}", SnapshotToDictionary(original[i]), null));
                 continue;
             }
 
             if (!hasBefore && hasAfter)
             {
-                output.Add(new PendingTreeEntryChange(
-                    TreeChangeType.Insert,
-                    tree.OriginalSkillTreeId,
-                    current[i].SkillId,
-                    $"Stage {tree.StageIndex} Tree {tree.TreeSlotIndex}",
-                    null,
-                    SnapshotToDictionary(current[i])));
+                output.Add(new PendingTreeEntryChange(TreeChangeType.Insert, tree.OriginalSkillTreeId, current[i].SkillId, $"Evo {tree.StageIndex} Tree {tree.TreeSlotIndex}", null, SnapshotToDictionary(current[i])));
                 continue;
             }
 
             if (hasBefore && hasAfter && original[i] != current[i])
             {
-                output.Add(new PendingTreeEntryChange(
-                    TreeChangeType.Update,
-                    tree.OriginalSkillTreeId,
-                    current[i].SkillId,
-                    $"Stage {tree.StageIndex} Tree {tree.TreeSlotIndex}",
-                    SnapshotToDictionary(original[i]),
-                    SnapshotToDictionary(current[i])));
+                output.Add(new PendingTreeEntryChange(TreeChangeType.Update, tree.OriginalSkillTreeId, current[i].SkillId, $"Evo {tree.StageIndex} Tree {tree.TreeSlotIndex}", SnapshotToDictionary(original[i]), SnapshotToDictionary(current[i])));
             }
         }
     }
@@ -658,7 +851,7 @@ public partial class MainWindow : Window
                     sb.AppendLine($"Skill {row.SkillId} -> Summon {row.SummonName} ({row.SummonId}), Tree {row.SkillTreeId}");
                 }
 
-                if (MessageBox.Show(this, sb.ToString(), "Global skill impact", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                if (_dialogService.Show(this, "Global skill impact", sb.ToString(), DialogButtons.YesNo, defaultResult: AppDialogResult.No) != AppDialogResult.Yes)
                 {
                     return null;
                 }
@@ -670,9 +863,7 @@ public partial class MainWindow : Window
         {
             var usage = await _repository.GetSharedTreeUsageAsync(changedTreeIds);
             var sharedPlan = SharedTreeClonePlanner.Build(request.TreeContexts, usage, chainIds);
-            var treeContextLookup = request.TreeContexts.ToDictionary(
-                x => (x.SummonId, x.TreeSlotIndex, x.OriginalSkillTreeId),
-                x => x);
+            var treeContextLookup = request.TreeContexts.ToDictionary(x => (x.SummonId, x.TreeSlotIndex, x.OriginalSkillTreeId), x => x);
 
             foreach (var planRow in sharedPlan.Where(x => x.IsSharedExternally))
             {
@@ -692,23 +883,18 @@ public partial class MainWindow : Window
                     sb.AppendLine($"Summon {row.SummonName} ({row.SummonId}) slot {row.TreeSlotIndex}");
                 }
 
-                var choice = MessageBox.Show(this, sb.ToString(), "Shared tree detected", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning);
-                if (choice == MessageBoxResult.Cancel)
+                var choice = _dialogService.Show(this, "Shared tree detected", sb.ToString(), DialogButtons.YesNoCancel, defaultResult: AppDialogResult.Cancel);
+                if (choice == AppDialogResult.Cancel)
                 {
                     return null;
                 }
 
-                cloneFlags[tree] = choice == MessageBoxResult.Yes;
+                cloneFlags[tree] = choice == AppDialogResult.Yes;
             }
         }
 
         var adjustedTrees = request.TreeContexts
-            .Select(x => new SkillTreeContext(
-                x.SummonId,
-                x.TreeSlotIndex,
-                x.OriginalSkillTreeId,
-                x.Entries,
-                cloneFlags[x]))
+            .Select(x => new SkillTreeContext(x.SummonId, x.TreeSlotIndex, x.OriginalSkillTreeId, x.Entries, cloneFlags[x]))
             .ToList();
 
         return new CommitRequest(adjustedTrees, request.SkillUpdates);
@@ -719,7 +905,6 @@ public partial class MainWindow : Window
         IReadOnlyList<PendingFieldChange> fieldChanges)
     {
         var rows = new List<SaveReviewRow>();
-
         foreach (var change in treeChanges)
         {
             rows.Add(new SaveReviewRow
@@ -750,12 +935,12 @@ public partial class MainWindow : Window
     private async Task RefreshSkillNamesAndEffectiveAsync()
     {
         await PopulateSkillNamesAsync();
-        BuildEffectiveSkills();
+        BuildEffectiveMatrix();
     }
 
     private async void BtnSettings_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new SettingsWindow(_settings)
+        var dialog = new SettingsWindow(_settings, _dialogService)
         {
             Owner = this
         };
@@ -766,9 +951,10 @@ public partial class MainWindow : Window
         }
 
         _settings = dialog.ResultSettings;
-        _settings.IncludeRidingOnlyByDefault = TglIncludeRiding.IsOn;
-        _settings.IncludeNonForm1ByDefault = TglIncludeNonForm1.IsOn;
-        _settings.ShowAllEvolutionsByDefault = TglShowAllEvos.IsOn;
+        _settings.IncludeRidingOnlyByDefault = ChkIncludeRiding.IsChecked == true;
+        _settings.IncludeNonForm1ByDefault = ChkIncludeNonForm1.IsChecked == true;
+        _settings.ShowAllEvolutionsByDefault = ChkShowAllEvos.IsChecked == true;
+
         await _settingsStore.SaveAsync(_settings);
         EnsureRepository();
         await BuildAssetIndexAsync();
@@ -779,7 +965,7 @@ public partial class MainWindow : Window
     {
         if (string.IsNullOrWhiteSpace(_lastDiffSql))
         {
-            MessageBox.Show(this, "No diff SQL available yet.", "Export", MessageBoxButton.OK, MessageBoxImage.Information);
+            _dialogService.Show(this, "Export", "No diff SQL available yet.");
             return;
         }
 
@@ -796,5 +982,20 @@ public partial class MainWindow : Window
 
         File.WriteAllText(dialog.FileName, _lastDiffSql);
         TxtStatus.Text = $"Diff exported: {dialog.FileName}";
+    }
+
+    private static T? FindVisualParent<T>(DependencyObject? child) where T : DependencyObject
+    {
+        while (child is not null)
+        {
+            if (child is T target)
+            {
+                return target;
+            }
+
+            child = VisualTreeHelper.GetParent(child);
+        }
+
+        return null;
     }
 }

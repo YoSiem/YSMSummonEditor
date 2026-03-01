@@ -4,8 +4,9 @@
         Title="Save Review"
         Height="600"
         Width="920"
-        WindowStartupLocation="CenterOwner">
-    <Grid Margin="14">
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource WindowBgBrush}">
+    <Grid Margin="14" Background="{DynamicResource WindowBgBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -18,7 +19,7 @@
                    FontWeight="SemiBold"
                    Text="Review all pending changes before commit" />
 
-        <ListView x:Name="ListChanges" Grid.Row="1">
+        <ListView x:Name="ListChanges" Grid.Row="1" AlternationCount="2">
             <ListView.View>
                 <GridView>
                     <GridViewColumn Header="Type" DisplayMemberBinding="{Binding ChangeType}" Width="120" />

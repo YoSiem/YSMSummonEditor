@@ -3,32 +3,61 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:mw="clr-namespace:ModernWpf.Controls;assembly=ModernWpf.Controls"
         mc:Ignorable="d"
         Title="YSM Summon Editor"
         Width="1560"
         Height="980"
-        MinWidth="1240"
-        MinHeight="800"
-        WindowStartupLocation="CenterScreen">
-    <Grid Margin="10">
+        MinWidth="1260"
+        MinHeight="820"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource WindowBgBrush}">
+    <Window.Resources>
+        <Style x:Key="BaseDataGridRowStyle" TargetType="DataGridRow">
+            <Setter Property="Background" Value="{DynamicResource RowOddBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+            <Setter Property="ToolTip" Value="{Binding ToolTipText}" />
+            <Style.Triggers>
+                <Trigger Property="AlternationIndex" Value="1">
+                    <Setter Property="Background" Value="{DynamicResource RowEvenBrush}" />
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource RowSelectedBrush}" />
+                    <Setter Property="Foreground" Value="White" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="DirtyDataGridRowStyle" TargetType="DataGridRow" BasedOn="{StaticResource BaseDataGridRowStyle}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsDirty}" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource RowDirtyBrush}" />
+                </DataTrigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource RowSelectedBrush}" />
+                    <Setter Property="Foreground" Value="White" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="10" Background="{DynamicResource WindowBgBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <DockPanel Grid.Row="0" Margin="0,0,0,10">
+        <DockPanel Grid.Row="0" Margin="0,0,0,10" Background="{DynamicResource WindowBgBrush}">
             <TextBlock DockPanel.Dock="Left"
                        VerticalAlignment="Center"
                        FontSize="22"
                        FontWeight="Bold"
-                       Text="YSM Summon Editor" />
+                       Text="Summon Editor" />
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
-                <Button x:Name="BtnSearch" Width="120" Height="32" Margin="0,0,8,0" Content="Search" Click="BtnSearch_Click" />
-                <Button x:Name="BtnSave" Width="120" Height="32" Margin="0,0,8,0" Content="Save" Click="BtnSave_Click" />
-                <Button x:Name="BtnExportDiff" Width="120" Height="32" Margin="0,0,8,0" Content="Export Diff" Click="BtnExportDiff_Click" />
-                <Button x:Name="BtnSettings" Width="120" Height="32" Content="Settings" Click="BtnSettings_Click" />
+                <Button x:Name="BtnSearch" Width="108" Height="32" Margin="0,0,8,0" Content="Search" Click="BtnSearch_Click" />
+                <Button x:Name="BtnSave" Width="108" Height="32" Margin="0,0,8,0" Content="Save" Click="BtnSave_Click" />
+                <Button x:Name="BtnExportDiff" Width="108" Height="32" Margin="0,0,8,0" Content="Export SQL" Click="BtnExportDiff_Click" />
+                <Button x:Name="BtnSettings" Width="108" Height="32" Content="Settings" Click="BtnSettings_Click" />
             </StackPanel>
         </DockPanel>
 
@@ -39,7 +68,7 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0" BorderBrush="#474747" BorderThickness="1" CornerRadius="8" Padding="10">
+            <Border Grid.Column="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10" Background="{DynamicResource PanelBgBrush}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -52,29 +81,30 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <TextBox x:Name="TxtSearch" Height="30" Margin="0,0,8,0" VerticalContentAlignment="Center" />
-                        <Button Grid.Column="1" Width="70" Height="30" Content="Go" Click="BtnSearch_Click" />
+                        <TextBox x:Name="TxtSearch" Height="30" Margin="0,0,8,0" VerticalContentAlignment="Center" ToolTip="Search by summon ID/name/card." />
+                        <Button Grid.Column="1" Width="68" Height="30" Content="Go" Click="BtnSearch_Click" />
                     </Grid>
 
                     <StackPanel Grid.Row="1" Margin="0,0,0,8">
-                        <mw:ToggleSwitch x:Name="TglIncludeRiding" Margin="0,0,0,4" Header="Include riding-only" />
-                        <mw:ToggleSwitch x:Name="TglIncludeNonForm1" Margin="0,0,0,4" Header="Include non-form1" />
-                        <mw:ToggleSwitch x:Name="TglShowAllEvos" Header="Show all evolutions" />
+                        <CheckBox x:Name="ChkIncludeRiding" Margin="0,0,0,4" Content="Riding-only" ToolTip="Include summons marked as riding-only." />
+                        <CheckBox x:Name="ChkIncludeNonForm1" Margin="0,0,0,4" Content="Non-form1" ToolTip="Include summons with form different than 1." />
+                        <CheckBox x:Name="ChkShowAllEvos" Content="All evolutions" ToolTip="Show every evolution stage, not only final evolutions." />
                     </StackPanel>
 
-                    <ListView x:Name="ListSummons" Grid.Row="2" SelectionChanged="ListSummons_SelectionChanged">
+                    <ListView x:Name="ListSummons" Grid.Row="2" SelectionChanged="ListSummons_SelectionChanged" AlternationCount="2">
                         <ListView.ItemTemplate>
                             <DataTemplate>
-                                <Grid Margin="0,2">
+                                <Grid Margin="0,2"
+                                      ToolTip="{Binding ToolTipText}">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="44" />
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
-                                    <Border Width="36" Height="36" VerticalAlignment="Center" HorizontalAlignment="Center" BorderBrush="#444" BorderThickness="1">
+                                    <Border Width="36" Height="36" VerticalAlignment="Center" HorizontalAlignment="Center" BorderBrush="{DynamicResource ControlBorderBrush}" BorderThickness="1">
                                         <Image Source="{Binding Icon}" Width="36" Height="36" Stretch="Fill" />
                                     </Border>
                                     <StackPanel Grid.Column="1" Margin="6,0,0,0" VerticalAlignment="Center">
-                                        <TextBlock FontWeight="SemiBold" Text="{Binding Summon.SummonName}" />
+                                        <TextBlock FontWeight="SemiBold" Text="{Binding Summon.SummonName}" TextTrimming="CharacterEllipsis" />
                                         <TextBlock Opacity="0.8" FontSize="12" Text="{Binding Summon.SummonId}" />
                                     </StackPanel>
                                 </Grid>
@@ -88,24 +118,23 @@
 
             <Grid Grid.Column="2">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="240" />
-                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="230" />
                     <RowDefinition Height="*" />
-                    <RowDefinition Height="220" />
+                    <RowDefinition Height="260" />
                 </Grid.RowDefinitions>
 
-                <Border Grid.Row="0" Margin="0,0,0,8" BorderBrush="#474747" BorderThickness="1" CornerRadius="8" Padding="10">
+                <Border Grid.Row="0" Margin="0,0,0,8" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10" Background="{DynamicResource PanelBgBrush}">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="350" />
+                            <ColumnDefinition Width="330" />
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                            <TextBlock x:Name="TxtSummonHeader" FontSize="28" FontWeight="Bold" Text="No summon selected" />
-                            <TextBlock x:Name="TxtSummonMeta" Margin="0,8,0,0" />
-                            <TextBlock x:Name="TxtChainInfo" Margin="0,8,0,0" />
+                            <TextBlock x:Name="TxtSummonHeader" FontSize="26" FontWeight="Bold" Text="No selection" ToolTip="Selected final evolution summon." />
+                            <TextBlock x:Name="TxtSummonMeta" Margin="0,8,0,0" Foreground="{DynamicResource TextMutedBrush}" ToolTip="Card and basic metadata." />
+                            <TextBlock x:Name="TxtChainInfo" Margin="0,8,0,0" Foreground="{DynamicResource TextMutedBrush}" ToolTip="Resolved evo chain IDs (E1 -> E2 -> E3)." />
                         </StackPanel>
-                        <Border Grid.Column="1" BorderThickness="1" BorderBrush="#444" Padding="4">
+                        <Border Grid.Column="1" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" Padding="4" Background="{DynamicResource PanelAltBrush}">
                             <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
                                 <Image x:Name="ImgLarge" Stretch="None" SnapsToDevicePixels="True" />
                             </ScrollViewer>
@@ -113,13 +142,7 @@
                     </Grid>
                 </Border>
 
-                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
-                    <Button Width="180" Height="32" Margin="0,0,8,0" Content="Add Skill To Tree" Click="BtnAddTreeEntry_Click" />
-                    <Button Width="220" Height="32" Margin="0,0,8,0" Content="Remove Selected Skill" Click="BtnDeleteTreeEntry_Click" />
-                    <TextBlock VerticalAlignment="Center" Text="Double-click skill row to open Edit Skill" />
-                </StackPanel>
-
-                <Grid Grid.Row="2" Margin="0,0,0,8">
+                <Grid Grid.Row="1" Margin="0,0,0,8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
@@ -130,7 +153,7 @@
                     <TabControl x:Name="TabTrees" Grid.Row="1" Margin="0,8,0,0">
                         <TabControl.ItemTemplate>
                             <DataTemplate>
-                                <TextBlock Text="{Binding Header}" />
+                                <TextBlock Text="{Binding Header}" ToolTip="{Binding HeaderToolTip}" />
                             </DataTemplate>
                         </TabControl.ItemTemplate>
                         <TabControl.ContentTemplate>
@@ -139,35 +162,35 @@
                                           SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
                                           AutoGenerateColumns="False"
                                           CanUserAddRows="False"
+                                          CanUserReorderColumns="False"
                                           SelectionMode="Single"
                                           IsReadOnly="False"
                                           CellEditEnding="GridTree_CellEditEnding"
-                                          MouseDoubleClick="GridTree_MouseDoubleClick">
-                                    <DataGrid.RowStyle>
-                                        <Style TargetType="DataGridRow">
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsDirty}" Value="True">
-                                                    <Setter Property="Background" Value="#334479ff" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </DataGrid.RowStyle>
+                                          PreviewMouseRightButtonDown="GridTree_PreviewMouseRightButtonDown"
+                                          RowStyle="{StaticResource DirtyDataGridRowStyle}">
+                                    <DataGrid.ContextMenu>
+                                        <ContextMenu Opened="TreeContextMenu_Opened">
+                                            <MenuItem x:Name="MnuTreeAddRow" Header="Add Row" Click="MnuTreeAddRow_Click" />
+                                            <MenuItem x:Name="MnuTreeEditSkill" Header="Edit Skill" Click="MnuTreeEditSkill_Click" />
+                                            <MenuItem x:Name="MnuTreeDeleteRow" Header="Delete From Tree" Click="MnuTreeDeleteRow_Click" />
+                                        </ContextMenu>
+                                    </DataGrid.ContextMenu>
                                     <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Skill ID" Binding="{Binding SkillId, UpdateSourceTrigger=PropertyChanged}" Width="80" />
-                                        <DataGridTextColumn Header="Skill Name" Binding="{Binding SkillName}" Width="220" IsReadOnly="True" />
-                                        <DataGridTextColumn Header="Group" Binding="{Binding SkillGroupId, UpdateSourceTrigger=PropertyChanged}" Width="70" />
-                                        <DataGridTextColumn Header="Min Lv" Binding="{Binding MinSkillLv, UpdateSourceTrigger=PropertyChanged}" Width="70" />
-                                        <DataGridTextColumn Header="Max Lv" Binding="{Binding MaxSkillLv, UpdateSourceTrigger=PropertyChanged}" Width="70" />
-                                        <DataGridTextColumn Header="Lv" Binding="{Binding Lv, UpdateSourceTrigger=PropertyChanged}" Width="70" />
-                                        <DataGridTextColumn Header="Job Lv" Binding="{Binding JobLv, UpdateSourceTrigger=PropertyChanged}" Width="70" />
-                                        <DataGridTextColumn Header="Need1" Binding="{Binding NeedSkillId1, UpdateSourceTrigger=PropertyChanged}" Width="70" />
-                                        <DataGridTextColumn Header="Need1 Lv" Binding="{Binding NeedSkillLv1, UpdateSourceTrigger=PropertyChanged}" Width="80" />
-                                        <DataGridTextColumn Header="Need2" Binding="{Binding NeedSkillId2, UpdateSourceTrigger=PropertyChanged}" Width="70" />
-                                        <DataGridTextColumn Header="Need2 Lv" Binding="{Binding NeedSkillLv2, UpdateSourceTrigger=PropertyChanged}" Width="80" />
-                                        <DataGridTextColumn Header="Need3" Binding="{Binding NeedSkillId3, UpdateSourceTrigger=PropertyChanged}" Width="70" />
-                                        <DataGridTextColumn Header="Need3 Lv" Binding="{Binding NeedSkillLv3, UpdateSourceTrigger=PropertyChanged}" Width="80" />
-                                        <DataGridTextColumn Header="Enh Min" Binding="{Binding CEnhanceMin, UpdateSourceTrigger=PropertyChanged}" Width="80" />
-                                        <DataGridTextColumn Header="Enh Max" Binding="{Binding CEnhanceMax, UpdateSourceTrigger=PropertyChanged}" Width="80" />
+                                        <DataGridTextColumn Header="ID" Binding="{Binding SkillId, UpdateSourceTrigger=PropertyChanged}" Width="70" />
+                                        <DataGridTextColumn Header="Skill" Binding="{Binding SkillName}" Width="210" IsReadOnly="True" />
+                                        <DataGridTextColumn Header="Grp" Binding="{Binding SkillGroupId, UpdateSourceTrigger=PropertyChanged}" Width="55" />
+                                        <DataGridTextColumn Header="Min" Binding="{Binding MinSkillLv, UpdateSourceTrigger=PropertyChanged}" Width="55" />
+                                        <DataGridTextColumn Header="Max" Binding="{Binding MaxSkillLv, UpdateSourceTrigger=PropertyChanged}" Width="55" />
+                                        <DataGridTextColumn Header="Lv" Binding="{Binding Lv, UpdateSourceTrigger=PropertyChanged}" Width="52" />
+                                        <DataGridTextColumn Header="Job" Binding="{Binding JobLv, UpdateSourceTrigger=PropertyChanged}" Width="55" />
+                                        <DataGridTextColumn Header="N1" Binding="{Binding NeedSkillId1, UpdateSourceTrigger=PropertyChanged}" Width="55" />
+                                        <DataGridTextColumn Header="N1 Lv" Binding="{Binding NeedSkillLv1, UpdateSourceTrigger=PropertyChanged}" Width="60" />
+                                        <DataGridTextColumn Header="N2" Binding="{Binding NeedSkillId2, UpdateSourceTrigger=PropertyChanged}" Width="55" />
+                                        <DataGridTextColumn Header="N2 Lv" Binding="{Binding NeedSkillLv2, UpdateSourceTrigger=PropertyChanged}" Width="60" />
+                                        <DataGridTextColumn Header="N3" Binding="{Binding NeedSkillId3, UpdateSourceTrigger=PropertyChanged}" Width="55" />
+                                        <DataGridTextColumn Header="N3 Lv" Binding="{Binding NeedSkillLv3, UpdateSourceTrigger=PropertyChanged}" Width="60" />
+                                        <DataGridTextColumn Header="E Min" Binding="{Binding CEnhanceMin, UpdateSourceTrigger=PropertyChanged}" Width="62" />
+                                        <DataGridTextColumn Header="E Max" Binding="{Binding CEnhanceMax, UpdateSourceTrigger=PropertyChanged}" Width="62" />
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </DataTemplate>
@@ -175,26 +198,132 @@
                     </TabControl>
                 </Grid>
 
-                <Border Grid.Row="3" BorderBrush="#474747" BorderThickness="1" CornerRadius="8" Padding="10">
+                <Border Grid.Row="2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10" Background="{DynamicResource PanelBgBrush}">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
-                        <TextBlock FontWeight="SemiBold" FontSize="16" Text="Effective Skills (Evo1+Evo2+Evo3)" Margin="0,0,0,8" />
+                        <TextBlock FontWeight="SemiBold" FontSize="16" Text="Effective Matrix" Margin="0,0,0,8" ToolTip="Per Tree+Skill+Lv view with individual Evo1/Evo2/Evo3 min/max values." />
+
                         <DataGrid x:Name="GridEffective"
                                   Grid.Row="1"
                                   AutoGenerateColumns="False"
                                   CanUserAddRows="False"
-                                  IsReadOnly="True"
-                                  MouseDoubleClick="GridEffective_MouseDoubleClick">
+                                  CanUserReorderColumns="False"
+                                  SelectionMode="Single"
+                                  IsReadOnly="False"
+                                  RowStyle="{StaticResource DirtyDataGridRowStyle}"
+                                  PreviewMouseRightButtonDown="GridEffective_PreviewMouseRightButtonDown"
+                                  CellEditEnding="GridEffective_CellEditEnding">
+                            <DataGrid.ContextMenu>
+                                <ContextMenu Opened="EffectiveContextMenu_Opened">
+                                    <MenuItem x:Name="MnuEffectiveEditSkill" Header="Edit Skill" Click="MnuEffectiveEditSkill_Click" />
+                                    <MenuItem x:Name="MnuEffectiveDeleteRow" Header="Delete From Tree" Click="MnuEffectiveDeleteRow_Click" />
+                                </ContextMenu>
+                            </DataGrid.ContextMenu>
+
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="Stage" Binding="{Binding StageIndex}" Width="70" />
-                                <DataGridTextColumn Header="Tree" Binding="{Binding TreeSlotIndex}" Width="70" />
-                                <DataGridTextColumn Header="Skill ID" Binding="{Binding SkillId}" Width="90" />
-                                <DataGridTextColumn Header="Skill Name" Binding="{Binding SkillName}" Width="260" />
-                                <DataGridTextColumn Header="Min Lv" Binding="{Binding MinSkillLevel}" Width="80" />
-                                <DataGridTextColumn Header="Max Lv" Binding="{Binding MaxSkillLevel}" Width="80" />
+                                <DataGridTextColumn Header="Tree" Binding="{Binding TreeSlotIndex}" Width="55" IsReadOnly="True" />
+                                <DataGridTextColumn Header="ID" Binding="{Binding SkillId}" Width="70" IsReadOnly="True" />
+                                <DataGridTextColumn Header="Skill" Binding="{Binding SkillName}" Width="220" IsReadOnly="True" />
+                                <DataGridTextColumn Header="Lv" Binding="{Binding Level}" Width="50" IsReadOnly="True" />
+
+                                <DataGridTemplateColumn Width="72">
+                                    <DataGridTemplateColumn.Header>
+                                        <TextBlock Text="E1 Min" ToolTip="Evo1 minimum skill level" />
+                                    </DataGridTemplateColumn.Header>
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding E1Min}" HorizontalAlignment="Center" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                    <DataGridTemplateColumn.CellEditingTemplate>
+                                        <DataTemplate>
+                                            <TextBox Text="{Binding E1Min, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding E1Available}" HorizontalContentAlignment="Center" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellEditingTemplate>
+                                </DataGridTemplateColumn>
+
+                                <DataGridTemplateColumn Width="72">
+                                    <DataGridTemplateColumn.Header>
+                                        <TextBlock Text="E1 Max" ToolTip="Evo1 maximum skill level" />
+                                    </DataGridTemplateColumn.Header>
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding E1Max}" HorizontalAlignment="Center" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                    <DataGridTemplateColumn.CellEditingTemplate>
+                                        <DataTemplate>
+                                            <TextBox Text="{Binding E1Max, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding E1Available}" HorizontalContentAlignment="Center" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellEditingTemplate>
+                                </DataGridTemplateColumn>
+
+                                <DataGridTemplateColumn Width="72">
+                                    <DataGridTemplateColumn.Header>
+                                        <TextBlock Text="E2 Min" ToolTip="Evo2 minimum skill level" />
+                                    </DataGridTemplateColumn.Header>
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding E2Min}" HorizontalAlignment="Center" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                    <DataGridTemplateColumn.CellEditingTemplate>
+                                        <DataTemplate>
+                                            <TextBox Text="{Binding E2Min, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding E2Available}" HorizontalContentAlignment="Center" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellEditingTemplate>
+                                </DataGridTemplateColumn>
+
+                                <DataGridTemplateColumn Width="72">
+                                    <DataGridTemplateColumn.Header>
+                                        <TextBlock Text="E2 Max" ToolTip="Evo2 maximum skill level" />
+                                    </DataGridTemplateColumn.Header>
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding E2Max}" HorizontalAlignment="Center" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                    <DataGridTemplateColumn.CellEditingTemplate>
+                                        <DataTemplate>
+                                            <TextBox Text="{Binding E2Max, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding E2Available}" HorizontalContentAlignment="Center" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellEditingTemplate>
+                                </DataGridTemplateColumn>
+
+                                <DataGridTemplateColumn Width="72">
+                                    <DataGridTemplateColumn.Header>
+                                        <TextBlock Text="E3 Min" ToolTip="Evo3 minimum skill level" />
+                                    </DataGridTemplateColumn.Header>
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding E3Min}" HorizontalAlignment="Center" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                    <DataGridTemplateColumn.CellEditingTemplate>
+                                        <DataTemplate>
+                                            <TextBox Text="{Binding E3Min, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding E3Available}" HorizontalContentAlignment="Center" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellEditingTemplate>
+                                </DataGridTemplateColumn>
+
+                                <DataGridTemplateColumn Width="72">
+                                    <DataGridTemplateColumn.Header>
+                                        <TextBlock Text="E3 Max" ToolTip="Evo3 maximum skill level" />
+                                    </DataGridTemplateColumn.Header>
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding E3Max}" HorizontalAlignment="Center" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                    <DataGridTemplateColumn.CellEditingTemplate>
+                                        <DataTemplate>
+                                            <TextBox Text="{Binding E3Max, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding E3Available}" HorizontalContentAlignment="Center" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellEditingTemplate>
+                                </DataGridTemplateColumn>
                             </DataGrid.Columns>
                         </DataGrid>
                     </Grid>
@@ -202,6 +331,6 @@
             </Grid>
         </Grid>
 
-        <TextBlock x:Name="TxtStatus" Grid.Row="2" Margin="4,10,0,0" />
+        <TextBlock x:Name="TxtStatus" Grid.Row="2" Margin="4,10,0,0" Foreground="{DynamicResource TextMutedBrush}" />
     </Grid>
 </Window>

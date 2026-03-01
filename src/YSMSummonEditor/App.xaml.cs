@@ -4,6 +4,7 @@ using YSMLib.AppSettings;
 using YSMLib.AssetIndexing;
 using YSMLib.GameData.SqlServer.Infrastructure;
 using YSMSummonEditor.Core.Services;
+using YSMSummonEditor.Services;
 
 namespace YSMSummonEditor;
 
@@ -23,6 +24,7 @@ public partial class App : System.Windows.Application
                 services.AddSingleton<SqlConnectionFactory>();
                 services.AddSingleton<IValueConversionService, ValueConversionService>();
                 services.AddSingleton<ISkillUpdateBuilder, SkillUpdateBuilder>();
+                services.AddSingleton<IAppDialogService, AppDialogService>();
                 services.AddSingleton<MainWindow>();
             })
             .Build();

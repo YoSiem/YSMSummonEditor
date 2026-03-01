@@ -10,4 +10,7 @@ public sealed class SummonDisplayItem(SummonListItem summon)
     public BitmapImage? Icon { get; set; }
 
     public string DisplayName => $"{Summon.SummonName} ({Summon.SummonId})";
+
+    public string ToolTipText =>
+        $"{Summon.SummonName} [{Summon.SummonId}] | Card: {Summon.CardName ?? "Unknown"} ({Summon.CardId}) | Form: {Summon.Form} | EvolveTarget: {Summon.EvolveTarget}";
 }

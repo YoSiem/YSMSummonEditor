@@ -78,6 +78,8 @@ public sealed partial class SkillTreeEntryRow : ObservableObject
 
     public bool IsNew { get; }
 
+    public string ToolTipText => $"Skill {SkillId} | {SkillName} | Lv {Lv} | Min {MinSkillLv} | Max {MaxSkillLv}";
+
     public SkillTreeEntrySnapshot ToSnapshot(int skillTreeId)
     {
         return new SkillTreeEntrySnapshot(
@@ -102,6 +104,7 @@ public sealed partial class SkillTreeEntryRow : ObservableObject
     {
         var current = ToSnapshot(_original.SkillTreeId);
         IsDirty = IsNew || current != _original;
+        OnPropertyChanged(nameof(ToolTipText));
     }
 
     partial void OnSkillIdChanged(int value) => RecalculateDirty();
@@ -118,4 +121,5 @@ public sealed partial class SkillTreeEntryRow : ObservableObject
     partial void OnNeedSkillLv3Changed(int value) => RecalculateDirty();
     partial void OnCEnhanceMinChanged(int value) => RecalculateDirty();
     partial void OnCEnhanceMaxChanged(int value) => RecalculateDirty();
+    partial void OnSkillNameChanged(string value) => OnPropertyChanged(nameof(ToolTipText));
 }
