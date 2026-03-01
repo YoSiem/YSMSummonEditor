@@ -29,7 +29,7 @@ public partial class StatScalingWindow : Window
         _enhanceAmplifyByLevel = creatureEnhance
             .GroupBy(x => x.EnhanceLevel)
             .Select(x => x.Last())
-            .ToDictionary(x => x.EnhanceLevel, x => x.StatAmplify);
+            .ToDictionary(x => (int)x.EnhanceLevel, x => x.StatAmplify);
 
         TxtHeader.Text = $"Stat Scaling | Summon {_original.SummonId} | Stat ID {_original.StatId} | Evolution Depth {_original.GrowthDepth}";
 
