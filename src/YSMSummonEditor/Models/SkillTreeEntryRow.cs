@@ -86,12 +86,25 @@ public sealed partial class SkillTreeEntryRow : ObservableObject
     [ObservableProperty]
     private bool _isDirty;
 
+    [ObservableProperty]
+    private int _randomGroupId;
+
+    [ObservableProperty]
+    private bool _isRandomGroup;
+
+    [ObservableProperty]
+    private string _randomGroupBadge = string.Empty;
+
+    [ObservableProperty]
+    private string _randomGroupTooltip = string.Empty;
+
+    [ObservableProperty]
+    private string _randomGroupState = string.Empty;
+
     public bool IsNew { get; }
 
     public string ToolTipText =>
-        string.IsNullOrWhiteSpace(SkillTooltipPlain)
-            ? $"Skill {SkillId} | {SkillName} | Lv {Lv} | Min {MinSkillLv} | Max {MaxSkillLv}"
-            : SkillTooltipPlain;
+        BuildToolTipText();
 
     public SkillTreeEntrySnapshot ToSnapshot(int skillTreeId)
     {
@@ -121,7 +134,11 @@ public sealed partial class SkillTreeEntryRow : ObservableObject
     }
 
     partial void OnSkillIdChanged(int value) => RecalculateDirty();
-    partial void OnSkillGroupIdChanged(int value) => RecalculateDirty();
+    partial void OnSkillGroupIdChanged(int value)
+    {
+        RecalculateDirty();
+        RandomGroupId = value;
+    }
     partial void OnMinSkillLvChanged(int value) => RecalculateDirty();
     partial void OnMaxSkillLvChanged(int value) => RecalculateDirty();
     partial void OnLvChanged(int value) => RecalculateDirty();
@@ -136,4 +153,22 @@ public sealed partial class SkillTreeEntryRow : ObservableObject
     partial void OnCEnhanceMaxChanged(int value) => RecalculateDirty();
     partial void OnSkillNameChanged(string value) => OnPropertyChanged(nameof(ToolTipText));
     partial void OnSkillTooltipPlainChanged(string value) => OnPropertyChanged(nameof(ToolTipText));
+    partial void OnIsRandomGroupChanged(bool value) => OnPropertyChanged(nameof(ToolTipText));
+    partial void OnRandomGroupBadgeChanged(string value) => OnPropertyChanged(nameof(ToolTipText));
+    partial void OnRandomGroupTooltipChanged(string value) => OnPropertyChanged(nameof(ToolTipText));
+    partial void OnRandomGroupStateChanged(string value) => OnPropertyChanged(nameof(ToolTipText));
+
+    private string BuildToolTipText()
+    {
+        var baseText = string.IsNullOrWhiteSpace(SkillTooltipPlain)
+            ? $"Skill {SkillId} | {SkillName} | Lv {Lv} | Min {MinSkillLv} | Max {MaxSkillLv}"
+            : SkillTooltipPlain;
+
+        if (!IsRandomGroup || string.IsNullOrWhiteSpace(RandomGroupTooltip))
+        {
+            return baseText;
+        }
+
+        return $"{baseText}\n\n{RandomGroupTooltip}";
+    }
 }
