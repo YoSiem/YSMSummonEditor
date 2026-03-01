@@ -36,7 +36,9 @@ public partial class MainWindow : Window
     private readonly IAppDialogService _dialogService;
 
     private readonly ObservableCollection<SummonDisplayItem> _summonItems = [];
-    private readonly ObservableCollection<EffectiveSkillMatrixRow> _effectiveRows = [];
+    private readonly ObservableCollection<EffectiveStageSkillRow> _effectiveEvo1Rows = [];
+    private readonly ObservableCollection<EffectiveStageSkillRow> _effectiveEvo2Rows = [];
+    private readonly ObservableCollection<EffectiveStageSkillRow> _effectiveEvo3Rows = [];
     private readonly List<StageViewState> _stageStates = [];
 
     private readonly Dictionary<int, SkillUpdate> _pendingSkillUpdates = new();
@@ -47,7 +49,7 @@ public partial class MainWindow : Window
     private ISummonEditorRepository? _repository;
     private EvolutionChainSnapshot? _currentChain;
     private string _lastDiffSql = string.Empty;
-    private int _effectiveContextStage;
+    private int _effectiveContextStage = 1;
 
     public MainWindow(
         ISettingsStore settingsStore,
@@ -65,7 +67,9 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         ListSummons.ItemsSource = _summonItems;
-        GridEffective.ItemsSource = _effectiveRows;
+        GridEffectiveEvo1.ItemsSource = _effectiveEvo1Rows;
+        GridEffectiveEvo2.ItemsSource = _effectiveEvo2Rows;
+        GridEffectiveEvo3.ItemsSource = _effectiveEvo3Rows;
 
         Loaded += MainWindow_Loaded;
     }
@@ -219,7 +223,7 @@ public partial class MainWindow : Window
             await BuildStageStateAsync(3, _currentChain.Stage3);
 
             await PopulateSkillDisplayAsync();
-            BuildEffectiveMatrix();
+            BuildEffectiveStageRows();
             BindStageTabs();
             UpdateHeader(final);
 
@@ -354,32 +358,61 @@ public partial class MainWindow : Window
             : plain;
     }
 
-    private void BuildEffectiveMatrix()
+    private void BuildEffectiveStageRows()
     {
-        _effectiveRows.Clear();
+        BuildEffectiveRowsForStage(1, _effectiveEvo1Rows);
+        BuildEffectiveRowsForStage(2, _effectiveEvo2Rows);
+        BuildEffectiveRowsForStage(3, _effectiveEvo3Rows);
+    }
 
-        var map = new Dictionary<string, EffectiveSkillMatrixRow>(StringComparer.Ordinal);
-        foreach (var stage in _stageStates)
+    private void BuildEffectiveRowsForStage(int stageIndex, ObservableCollection<EffectiveStageSkillRow> target)
+    {
+        target.Clear();
+        var stage = _stageStates.FirstOrDefault(x => x.StageIndex == stageIndex);
+        if (stage is null)
         {
-            foreach (var tree in stage.Trees)
-            {
-                foreach (var entry in tree.CurrentEntries)
-                {
-                    var key = $"{tree.TreeSlotIndex}:{entry.SkillId}:{entry.Lv}";
-                    if (!map.TryGetValue(key, out var row))
-                    {
-                        row = new EffectiveSkillMatrixRow(tree.TreeSlotIndex, entry.SkillId, entry.Lv);
-                        map[key] = row;
-                    }
+            return;
+        }
 
-                    row.AttachStageEntry(stage.StageIndex, entry);
+        var map = new Dictionary<string, EffectiveStageSkillRow>(StringComparer.Ordinal);
+        foreach (var tree in stage.Trees)
+        {
+            foreach (var entry in tree.CurrentEntries)
+            {
+                if (entry.SkillId <= 0)
+                {
+                    continue;
                 }
+
+                var key = $"{entry.SkillId}:{entry.Lv}";
+                if (!map.TryGetValue(key, out var row))
+                {
+                    row = new EffectiveStageSkillRow(entry.SkillId, entry.Lv)
+                    {
+                        SkillName = entry.SkillName,
+                        SkillIcon = entry.SkillIcon,
+                        SkillTooltipMarkup = entry.SkillTooltipMarkup,
+                        SkillTooltipPlain = entry.SkillTooltipPlain,
+                        MinSkillLv = entry.MinSkillLv,
+                        MaxSkillLv = entry.MaxSkillLv,
+                        IsDirty = entry.IsDirty
+                    };
+                    map[key] = row;
+                }
+                else
+                {
+                    row.MinSkillLv = Math.Min(row.MinSkillLv, entry.MinSkillLv);
+                    row.MaxSkillLv = Math.Max(row.MaxSkillLv, entry.MaxSkillLv);
+                    row.IsDirty = row.IsDirty || entry.IsDirty;
+                }
+
+                row.LinkedEntries.Add(entry);
             }
         }
 
-        foreach (var row in map.Values.OrderBy(x => x.TreeSlotIndex).ThenBy(x => x.SkillId).ThenBy(x => x.Level))
+        foreach (var row in map.Values.OrderBy(x => x.SkillId).ThenBy(x => x.Level))
         {
-            _effectiveRows.Add(row);
+            target.Add(row);
         }
     }
 
@@ -566,12 +599,11 @@ public partial class MainWindow : Window
         }
 
         var row = FindVisualParent<DataGridRow>(e.OriginalSource as DependencyObject);
-        var cell = FindVisualParent<DataGridCell>(e.OriginalSource as DependencyObject);
-        if (row?.Item is EffectiveSkillMatrixRow matrixRow)
+        if (row?.Item is EffectiveStageSkillRow stageRow)
         {
-            grid.SelectedItem = matrixRow;
+            grid.SelectedItem = stageRow;
             row.IsSelected = true;
-            _effectiveContextStage = ResolveStageFromEffectiveColumn(cell?.Column);
+            _effectiveContextStage = ResolveStageFromEffectiveGrid(grid);
         }
         else
         {
@@ -586,8 +618,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var row = GridEffective.SelectedItem as EffectiveSkillMatrixRow;
-        var stage = row is null ? 0 : ResolveEffectiveActionStage(row);
+        var (stage, row) = GetSelectedEffectiveRow();
 
         if (menu.Items.Count > 0 && menu.Items[0] is MenuItem edit)
         {
@@ -596,41 +627,58 @@ public partial class MainWindow : Window
 
         if (menu.Items.Count > 1 && menu.Items[1] is MenuItem delete)
         {
-            delete.IsEnabled = row is not null && stage > 0 && row.TryGetEntry(stage, out _);
+            delete.IsEnabled = row is not null && stage > 0 && row.LinkedEntries.Count > 0;
         }
     }
 
-    private int ResolveEffectiveActionStage(EffectiveSkillMatrixRow row)
+    private int ResolveEffectiveActionStage()
     {
         return _effectiveContextStage is >= 1 and <= 3
             ? _effectiveContextStage
-            : row.FirstAvailableStage;
+            : 0;
     }
 
-    private static int ResolveStageFromEffectiveColumn(DataGridColumn? column)
+    private static int ResolveStageFromEffectiveGrid(DataGrid grid)
     {
-        if (column is null)
+        if (grid.Tag is int stageByInt)
         {
-            return 0;
+            return stageByInt;
         }
 
-        return column.DisplayIndex switch
+        if (grid.Tag is string stageByString && int.TryParse(stageByString, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
         {
-            4 or 5 => 1,
-            6 or 7 => 2,
-            8 or 9 => 3,
+            return parsed;
+        }
+
+        return grid.Name switch
+        {
+            "GridEffectiveEvo1" => 1,
+            "GridEffectiveEvo2" => 2,
+            "GridEffectiveEvo3" => 3,
             _ => 0
         };
     }
 
-    private TreeContextState? FindTreeByStageAndSlot(int stageIndex, int treeSlotIndex)
+    private (int Stage, EffectiveStageSkillRow? Row) GetSelectedEffectiveRow()
     {
-        return _stageStates.FirstOrDefault(x => x.StageIndex == stageIndex)?.Trees.FirstOrDefault(x => x.TreeSlotIndex == treeSlotIndex);
+        var stage = ResolveEffectiveActionStage();
+        var grid = stage switch
+        {
+            1 => GridEffectiveEvo1,
+            2 => GridEffectiveEvo2,
+            3 => GridEffectiveEvo3,
+            _ => null
+        };
+
+        return grid?.SelectedItem is EffectiveStageSkillRow row
+            ? (stage, row)
+            : (stage, null);
     }
 
     private async void MnuEffectiveEditSkill_Click(object sender, RoutedEventArgs e)
     {
-        if (GridEffective.SelectedItem is not EffectiveSkillMatrixRow row || row.SkillId <= 0)
+        var (_, row) = GetSelectedEffectiveRow();
+        if (row is null || row.SkillId <= 0)
         {
             return;
         }
@@ -640,30 +688,61 @@ public partial class MainWindow : Window
 
     private async void MnuEffectiveDeleteRow_Click(object sender, RoutedEventArgs e)
     {
-        if (GridEffective.SelectedItem is not EffectiveSkillMatrixRow row)
+        var (stage, row) = GetSelectedEffectiveRow();
+        if (row is null)
         {
             return;
         }
 
-        var stage = ResolveEffectiveActionStage(row);
-        if (stage <= 0 || !row.TryGetEntry(stage, out var treeRow) || treeRow is null)
+        if (stage <= 0 || row.LinkedEntries.Count == 0)
         {
             return;
         }
 
-        var tree = FindTreeByStageAndSlot(stage, row.TreeSlotIndex);
-        if (tree is null)
+        var confirm = _dialogService.Show(
+            this,
+            "Confirm delete",
+            $"Delete skill {row.SkillId} (Lv {row.Level}) from Evo {stage}? This will remove {row.LinkedEntries.Count} row(s).",
+            DialogButtons.YesNo,
+            defaultResult: AppDialogResult.No);
+        if (confirm != AppDialogResult.Yes)
         {
             return;
         }
 
-        await DeleteTreeEntryAsync(tree, treeRow);
+        var stageState = _stageStates.FirstOrDefault(x => x.StageIndex == stage);
+        if (stageState is null)
+        {
+            return;
+        }
+
+        foreach (var treeEntry in row.LinkedEntries.ToList())
+        {
+            foreach (var tree in stageState.Trees)
+            {
+                _ = tree.CurrentEntries.Remove(treeEntry);
+            }
+        }
+
+        await RefreshSkillNamesAndEffectiveAsync();
     }
 
     private void GridEffective_CellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
     {
         if (e.EditAction == DataGridEditAction.Commit)
         {
+            var stage = sender is DataGrid grid ? ResolveStageFromEffectiveGrid(grid) : 0;
+            if (stage > 0 && e.Row.Item is EffectiveStageSkillRow row)
+            {
+                foreach (var linked in row.LinkedEntries)
+                {
+                    linked.MinSkillLv = row.MinSkillLv;
+                    linked.MaxSkillLv = row.MaxSkillLv;
+                }
+
+                row.IsDirty = row.LinkedEntries.Any(x => x.IsDirty);
+            }
+
             TxtStatus.Text = "Matrix change staged.";
         }
     }
@@ -961,7 +1040,23 @@ public partial class MainWindow : Window
     private async Task RefreshSkillNamesAndEffectiveAsync()
     {
         await PopulateSkillDisplayAsync();
-        BuildEffectiveMatrix();
+        BuildEffectiveStageRows();
+    }
+
+    private void TabEffectiveStages_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (TabEffectiveStages.SelectedItem is not TabItem tab)
+        {
+            return;
+        }
+
+        _effectiveContextStage = tab.Header switch
+        {
+            "Evo 1" => 1,
+            "Evo 2" => 2,
+            "Evo 3" => 3,
+            _ => 0
+        };
     }
 
     private async void BtnSettings_Click(object sender, RoutedEventArgs e)

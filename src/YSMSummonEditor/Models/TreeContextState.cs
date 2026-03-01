@@ -21,7 +21,7 @@ public sealed class TreeContextState(
     public ObservableCollection<SkillTreeEntryRow> CurrentEntries { get; } = new(
         originalEntries.Select(x => new SkillTreeEntryRow(x)));
 
-    public string Header => $"T{TreeSlotIndex}";
+    public string Header => $"SkillTree {TreeSlotIndex}";
     public string HeaderToolTip => $"Tree {TreeSlotIndex}, SkillTreeId: {OriginalSkillTreeId}";
 
     public SkillTreeEntryRow? SelectedEntry { get; set; }
