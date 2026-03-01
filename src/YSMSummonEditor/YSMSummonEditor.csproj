@@ -17,5 +17,11 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <ApplicationIcon>..\..\Assets\Logo.ico</ApplicationIcon>
   </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="..\..\Assets\Logo.ico" Link="Assets\Logo.ico" />
+    <Resource Include="..\..\Assets\Heaven_logo1.png" Link="Assets\Heaven_logo1.png" />
+    <Resource Include="..\..\Assets\common_mark_icon_unknown_middle.jpg" Link="Assets\common_mark_icon_unknown_middle.jpg" />
+  </ItemGroup>
 </Project>

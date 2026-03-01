@@ -10,6 +10,7 @@
         MinWidth="1260"
         MinHeight="820"
         WindowStartupLocation="CenterScreen"
+        Icon="pack://application:,,,/Assets/Logo.ico"
         Background="{DynamicResource WindowBgBrush}">
     <Window.Resources>
         <Style x:Key="BaseDataGridRowStyle" TargetType="DataGridRow">
@@ -63,11 +64,22 @@
         </Grid.RowDefinitions>
 
         <DockPanel Grid.Row="0" Margin="0,0,0,10" Background="{DynamicResource WindowBgBrush}">
-            <TextBlock DockPanel.Dock="Left"
-                       VerticalAlignment="Center"
-                       FontSize="22"
-                       FontWeight="Bold"
-                       Text="Summon Editor" />
+            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+                <Image Source="pack://application:,,,/Assets/Heaven_logo1.png"
+                       Height="28"
+                       Width="120"
+                       Stretch="Uniform"
+                       Margin="0,0,10,0" />
+                <TextBlock VerticalAlignment="Center"
+                           FontSize="22"
+                           FontWeight="Bold"
+                           Text="Summon Editor" />
+                <TextBlock VerticalAlignment="Center"
+                           Margin="8,6,0,0"
+                           FontSize="11"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           Text="made by YoSiem" />
+            </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
                 <Button x:Name="BtnSave" Width="108" Height="32" Margin="0,0,8,0" Content="Save" Click="BtnSave_Click" />
                 <Button x:Name="BtnStats" Width="108" Height="32" Margin="0,0,8,0" Content="Stats" Click="BtnStats_Click" IsEnabled="False" />

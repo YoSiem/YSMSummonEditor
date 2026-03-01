@@ -63,6 +63,7 @@ public partial class MainWindow : Window
     private bool _isRestoringSelection;
     private SummonDisplayItem? _activeSummon;
     private bool _isLoadingChainForSelection;
+    private readonly System.Windows.Media.Imaging.BitmapImage? _fallbackIcon36;
 
     public MainWindow(
         ISettingsStore settingsStore,
@@ -80,6 +81,7 @@ public partial class MainWindow : Window
         _dialogService = dialogService;
 
         InitializeComponent();
+        _fallbackIcon36 = LoadEmbeddedImage("pack://application:,,,/Assets/common_mark_icon_unknown_middle.jpg");
 
         ListSummons.ItemsSource = _summonItems;
         GridEffective.ItemsSource = _effectiveEvo1Rows;
@@ -237,7 +239,7 @@ public partial class MainWindow : Window
             {
                 _summonItems.Add(new SummonDisplayItem(summon)
                 {
-                    Icon = ImageLoader.TryLoad(_assetResolver.ResolveSummonFace(summon.FaceFileName))
+                    Icon = Resolve36IconOrFallback(_assetResolver.ResolveSummonFace(summon.FaceFileName))
                 });
             }
 
@@ -445,14 +447,14 @@ public partial class MainWindow : Window
                 row.SkillName = display.SkillName;
                 row.SkillTooltipMarkup = display.TooltipMarkup ?? string.Empty;
                 row.SkillTooltipPlain = BuildSkillTooltipPlain(display.TooltipMarkup, row.SkillId, display.SkillName);
-                row.SkillIcon = ImageLoader.TryLoad(_assetResolver.ResolveSkillIcon(display.IconFileName));
+                row.SkillIcon = Resolve36IconOrFallback(_assetResolver.ResolveSkillIcon(display.IconFileName));
             }
             else
             {
                 row.SkillName = $"Skill {row.SkillId}";
                 row.SkillTooltipMarkup = string.Empty;
                 row.SkillTooltipPlain = $"Skill {row.SkillId}";
-                row.SkillIcon = null;
+                row.SkillIcon = _fallbackIcon36;
             }
         }
     }
@@ -583,7 +585,7 @@ public partial class MainWindow : Window
         TxtSummonFeature.Text = featureText ?? string.Empty;
         TxtSummonFeature.ToolTip = string.IsNullOrWhiteSpace(featureText) ? null : featureText;
         TxtSummonFeature.Visibility = string.IsNullOrWhiteSpace(featureText) ? Visibility.Collapsed : Visibility.Visible;
-        ImgSummonHeaderIcon.Source = ImageLoader.TryLoad(_assetResolver.ResolveSummonFace(final.FaceFileName));
+        ImgSummonHeaderIcon.Source = Resolve36IconOrFallback(_assetResolver.ResolveSummonFace(final.FaceFileName));
         TxtSummonMeta.Text = $"ID: {final.SummonId} | Card: {final.CardId}";
         TxtSummonMeta.ToolTip = $"Card: {final.CardName ?? "Unknown"} ({final.CardId})";
         UpdateChainVisual(_currentChain);
@@ -626,8 +628,31 @@ public partial class MainWindow : Window
         }
 
         stageContainer.Visibility = Visibility.Visible;
-        stageIcon.Source = ImageLoader.TryLoad(_assetResolver.ResolveSummonFace(stage.FaceFileName));
+        stageIcon.Source = Resolve36IconOrFallback(_assetResolver.ResolveSummonFace(stage.FaceFileName));
         stageIdText.Text = stage.SummonId.ToString(CultureInfo.InvariantCulture);
+    }
+
+    private System.Windows.Media.Imaging.BitmapImage? Resolve36IconOrFallback(string? path)
+    {
+        return ImageLoader.TryLoad(path) ?? _fallbackIcon36;
+    }
+
+    private static System.Windows.Media.Imaging.BitmapImage? LoadEmbeddedImage(string packUri)
+    {
+        try
+        {
+            var image = new System.Windows.Media.Imaging.BitmapImage();
+            image.BeginInit();
+            image.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            image.UriSource = new Uri(packUri, UriKind.Absolute);
+            image.EndInit();
+            image.Freeze();
+            return image;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private TreeContextState? GetSelectedTree() => TabTrees.SelectedItem as TreeContextState;
