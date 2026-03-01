@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:helpers="clr-namespace:YSMSummonEditor.Helpers"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="YSM Summon Editor"
@@ -239,8 +240,11 @@
                                                   AutoGenerateColumns="False"
                                                   CanUserAddRows="False"
                                                   CanUserReorderColumns="False"
+                                                  CanUserResizeColumns="False"
                                                   SelectionMode="Single"
                                                   IsReadOnly="False"
+                                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                  helpers:DataGridColumnAutoFit.LayoutSpec="0|f|44|44;1|w|0.9|58;2|w|3.2|170;3|w|0.8|50;4|w|0.8|50;5|w|0.75|48;6|w|0.8|50;7|w|0.75|50;8|w|0.8|54;9|w|0.75|50;10|w|0.8|54;11|w|0.75|50;12|w|0.8|54;13|w|0.9|58;14|w|0.9|58"
                                                   CellEditEnding="GridTree_CellEditEnding"
                                                   PreviewMouseRightButtonDown="GridTree_PreviewMouseRightButtonDown"
                                                   RowStyle="{StaticResource DirtyDataGridRowStyle}">
@@ -267,8 +271,8 @@
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>
-                                                <DataGridTextColumn Header="ID" Binding="{Binding SkillId, UpdateSourceTrigger=PropertyChanged}" Width="70" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
-                                                <DataGridTemplateColumn Header="Skill" Width="210" IsReadOnly="True">
+                                                <DataGridTextColumn Header="ID" Binding="{Binding SkillId, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="58" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                                <DataGridTemplateColumn Header="Skill" Width="3*" MinWidth="170" IsReadOnly="True">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate>
                                                             <TextBlock Text="{Binding SkillName}" Style="{StaticResource CenteredDisplayTextStyle}">
@@ -282,19 +286,19 @@
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>
-                                                <DataGridTextColumn Header="Grp" Binding="{Binding SkillGroupId, UpdateSourceTrigger=PropertyChanged}" Width="55" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
-                                                <DataGridTextColumn Header="Min" Binding="{Binding MinSkillLv, UpdateSourceTrigger=PropertyChanged}" Width="55" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
-                                                <DataGridTextColumn Header="Max" Binding="{Binding MaxSkillLv, UpdateSourceTrigger=PropertyChanged}" Width="55" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
-                                                <DataGridTextColumn Header="Lv" Binding="{Binding Lv, UpdateSourceTrigger=PropertyChanged}" Width="52" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
-                                                <DataGridTextColumn Header="Job" Binding="{Binding JobLv, UpdateSourceTrigger=PropertyChanged}" Width="55" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
-                                                <DataGridTextColumn Header="N1" Binding="{Binding NeedSkillId1, UpdateSourceTrigger=PropertyChanged}" Width="55" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
-                                                <DataGridTextColumn Header="N1 Lv" Binding="{Binding NeedSkillLv1, UpdateSourceTrigger=PropertyChanged}" Width="60" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
-                                                <DataGridTextColumn Header="N2" Binding="{Binding NeedSkillId2, UpdateSourceTrigger=PropertyChanged}" Width="55" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
-                                                <DataGridTextColumn Header="N2 Lv" Binding="{Binding NeedSkillLv2, UpdateSourceTrigger=PropertyChanged}" Width="60" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
-                                                <DataGridTextColumn Header="N3" Binding="{Binding NeedSkillId3, UpdateSourceTrigger=PropertyChanged}" Width="55" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
-                                                <DataGridTextColumn Header="N3 Lv" Binding="{Binding NeedSkillLv3, UpdateSourceTrigger=PropertyChanged}" Width="60" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
-                                                <DataGridTextColumn Header="E Min" Binding="{Binding CEnhanceMin, UpdateSourceTrigger=PropertyChanged}" Width="62" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
-                                                <DataGridTextColumn Header="E Max" Binding="{Binding CEnhanceMax, UpdateSourceTrigger=PropertyChanged}" Width="62" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                                <DataGridTextColumn Header="Grp" Binding="{Binding SkillGroupId, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="50" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                                <DataGridTextColumn Header="Min" Binding="{Binding MinSkillLv, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="50" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                                <DataGridTextColumn Header="Max" Binding="{Binding MaxSkillLv, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="50" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                                <DataGridTextColumn Header="Lv" Binding="{Binding Lv, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="48" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                                <DataGridTextColumn Header="Job" Binding="{Binding JobLv, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="50" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                                <DataGridTextColumn Header="N1" Binding="{Binding NeedSkillId1, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="50" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                                <DataGridTextColumn Header="N1 Lv" Binding="{Binding NeedSkillLv1, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="54" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                                <DataGridTextColumn Header="N2" Binding="{Binding NeedSkillId2, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="50" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                                <DataGridTextColumn Header="N2 Lv" Binding="{Binding NeedSkillLv2, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="54" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                                <DataGridTextColumn Header="N3" Binding="{Binding NeedSkillId3, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="50" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                                <DataGridTextColumn Header="N3 Lv" Binding="{Binding NeedSkillLv3, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="54" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                                <DataGridTextColumn Header="E Min" Binding="{Binding CEnhanceMin, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="58" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                                <DataGridTextColumn Header="E Max" Binding="{Binding CEnhanceMax, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="58" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
                                             </DataGrid.Columns>
                                         </DataGrid>
                                     </DataTemplate>
@@ -318,8 +322,11 @@
                                           AutoGenerateColumns="False"
                                           CanUserAddRows="False"
                                           CanUserReorderColumns="False"
+                                          CanUserResizeColumns="False"
                                           SelectionMode="Single"
                                           IsReadOnly="False"
+                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                          helpers:DataGridColumnAutoFit.LayoutSpec="0|f|44|44;1|w|1.1|72;2|w|3.6|190;3|w|1.0|56;4|w|1.0|56;5|w|0.9|52"
                                           RowStyle="{StaticResource DirtyDataGridRowStyle}"
                                           PreviewMouseRightButtonDown="GridEffective_PreviewMouseRightButtonDown"
                                           CellEditEnding="GridEffective_CellEditEnding">
@@ -345,8 +352,8 @@
                                                 </DataTemplate>
                                             </DataGridTemplateColumn.CellTemplate>
                                         </DataGridTemplateColumn>
-                                        <DataGridTextColumn Header="ID" Binding="{Binding SkillId}" Width="70" IsReadOnly="True" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
-                                        <DataGridTemplateColumn Header="Skill" Width="220" IsReadOnly="True">
+                                        <DataGridTextColumn Header="ID" Binding="{Binding SkillId}" Width="*" MinWidth="72" IsReadOnly="True" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                        <DataGridTemplateColumn Header="Skill" Width="3*" MinWidth="190" IsReadOnly="True">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
                                                     <TextBlock Text="{Binding SkillName}" Style="{StaticResource CenteredDisplayTextStyle}">
@@ -360,9 +367,9 @@
                                                 </DataTemplate>
                                             </DataGridTemplateColumn.CellTemplate>
                                         </DataGridTemplateColumn>
-                                        <DataGridTextColumn Header="Min" Binding="{Binding MinSkillLv, UpdateSourceTrigger=PropertyChanged}" Width="55" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
-                                        <DataGridTextColumn Header="Max" Binding="{Binding MaxSkillLv, UpdateSourceTrigger=PropertyChanged}" Width="55" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
-                                        <DataGridTextColumn Header="Lv" Binding="{Binding Level}" Width="50" IsReadOnly="True" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                        <DataGridTextColumn Header="Min" Binding="{Binding MinSkillLv, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="56" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                        <DataGridTextColumn Header="Max" Binding="{Binding MaxSkillLv, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="56" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
+                                        <DataGridTextColumn Header="Lv" Binding="{Binding Level}" Width="*" MinWidth="52" IsReadOnly="True" ElementStyle="{StaticResource CenteredDisplayTextStyle}" EditingElementStyle="{StaticResource CenteredEditTextStyle}" />
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </Grid>
