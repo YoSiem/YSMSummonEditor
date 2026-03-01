@@ -96,6 +96,15 @@ public partial class MainWindow : Window
             TxtStatus.Text = $"Loaded DB defaults from {Path.GetFileName(localEnvPath)}.";
         }
 
+        var defaultDumpApplied = await EnsureDefaultDumpFolderAsync();
+        if (defaultDumpApplied)
+        {
+            const string dumpDefaultedMessage = "Dump folder defaulted to Desktop\\Dump.";
+            TxtStatus.Text = string.IsNullOrWhiteSpace(TxtStatus.Text)
+                ? dumpDefaultedMessage
+                : $"{TxtStatus.Text} {dumpDefaultedMessage}";
+        }
+
         ChkIncludeRiding.IsChecked = _settings.IncludeRidingOnlyByDefault;
         ChkIncludeNonForm1.IsChecked = _settings.IncludeNonForm1ByDefault;
         ChkShowAllEvos.IsChecked = _settings.ShowAllEvolutionsByDefault;
@@ -103,8 +112,28 @@ public partial class MainWindow : Window
         EnsureRepository();
         if (_repository is null)
         {
-            TxtStatus.Text = "Database is not configured. Add .env.local or set values in Settings.";
+            const string dbNotConfiguredMessage = "Database is not configured. Add .env.local or set values in Settings.";
+            TxtStatus.Text = string.IsNullOrWhiteSpace(TxtStatus.Text)
+                ? dbNotConfiguredMessage
+                : $"{TxtStatus.Text} {dbNotConfiguredMessage}";
         }
+    }
+
+    private async Task<bool> EnsureDefaultDumpFolderAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(_settings.DumpFolderPath))
+        {
+            return false;
+        }
+
+        var desktopDumpPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+            "Dump");
+
+        Directory.CreateDirectory(desktopDumpPath);
+        _settings.DumpFolderPath = desktopDumpPath;
+        await _settingsStore.SaveAsync(_settings);
+        return true;
     }
 
     private async Task BuildAssetIndexAsync()
