@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\YSMLib\src\YSMLib.GameData.Abstractions\YSMLib.GameData.Abstractions.csproj" />
+    <ProjectReference Include="..\..\..\YSMLib\src\YSMLib.ChangeTracking\YSMLib.ChangeTracking.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+  </ItemGroup>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+</Project>

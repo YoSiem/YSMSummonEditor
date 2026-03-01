@@ -1,0 +1,30 @@
+# Build
+bin/
+obj/
+out/
+publish/
+
+# IDE
+.vs/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.DotSettings.user
+_ReSharper*/
+*.ReSharper
+
+# Test
+TestResults/
+*.trx
+*.coverage
+coverage/
+
+# App data
+*.db
+*.log
+
+# OS
+Thumbs.db
+Desktop.ini

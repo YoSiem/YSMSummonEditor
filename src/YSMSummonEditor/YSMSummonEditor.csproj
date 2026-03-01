@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\YSMSummonEditor.Core\YSMSummonEditor.Core.csproj" />
+    <ProjectReference Include="..\..\..\YSMLib\src\YSMLib.GameData.Abstractions\YSMLib.GameData.Abstractions.csproj" />
+    <ProjectReference Include="..\..\..\YSMLib\src\YSMLib.GameData.SqlServer\YSMLib.GameData.SqlServer.csproj" />
+    <ProjectReference Include="..\..\..\YSMLib\src\YSMLib.AppSettings\YSMLib.AppSettings.csproj" />
+    <ProjectReference Include="..\..\..\YSMLib\src\YSMLib.AssetIndexing\YSMLib.AssetIndexing.csproj" />
+    <ProjectReference Include="..\..\..\YSMLib\src\YSMLib.ChangeTracking\YSMLib.ChangeTracking.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+    <PackageReference Include="WPF-UI" Version="4.2.0" />
+    <PackageReference Include="ModernWpfUI" Version="0.9.6" />
+  </ItemGroup>
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+</Project>
