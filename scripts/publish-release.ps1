@@ -18,6 +18,7 @@ dotnet publish ".\src\YSMSummonEditor\YSMSummonEditor.csproj" `
     -c Release `
     -p:PublishProfile=$profile `
     -p:PublishDir="$publishDir" `
+    -p:GeneratePackageOnBuild=false `
     -p:DebugSymbols=false `
     -p:DebugType=None `
     -p:GenerateDocumentationFile=false
