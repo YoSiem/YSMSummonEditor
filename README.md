@@ -1,96 +1,132 @@
 # YSMSummonEditor
 
-`YSMSummonEditor` is a desktop editor for Rappelz summon resources (WPF, .NET 10, MSSQL).
-It is focused on safe staged editing, readable UI, and fast summon/skill workflow.
+`YSMSummonEditor` is a Windows desktop editor for Rappelz summon data, built with WPF and backed by MSSQL. It is intended for structured content editing with staged changes, review before save, and a workflow tailored for summon, skill tree, random skill group, and stat-scaling work.
 
-## What You Can Do
+## Overview
 
-### Summons and evolution chain
+The application combines summon browsing, multi-evolution editing, skill and skill tree management, stat scaling tools, image lookup, and controlled save/export flow in a single dark-themed editor. It is built on top of `YSMLib` and currently targets MSSQL only.
 
-- Search summons by text or exact ID (`Go` button or `Enter`).
-- Browse summon list with 36x36 icons.
-- Load full 3-evolution chain automatically for selected final summon.
-- See summon header icon, description (`text_feature_id`), and chain as icon flow (`Evo1 -> Evo2 -> Evo3`).
+## Core Capabilities
 
-### Skill trees and skills
+### Summon browsing and evolution chain
 
-- Edit `SkillTreeResource` rows directly in grid (inline values).
-- Open skill editor by right-click (`Edit Skill`) in `SkillTree` or `Effective Skills`.
-- Delete rows by right-click with confirmation.
-- Staged dirty tracking with visual row highlight.
+- Search by summon ID, summon name, or related text using `Go` or `Enter`
+- Browse summons with 36x36 icons
+- Load the full three-step evolution chain automatically for the selected final summon
+- Display summon header icon, feature text, card metadata, and a visual `Evolution 1 -> Evolution 2 -> Evolution 3` chain
 
-### Random skill groups (`SummonRandomSkillResource`)
+### Skill tree editing
 
-- Full support for `skill_group_id` in skill tree rows.
-- Right-click actions in `SkillTree`:
-  - `Create Random Group`
-  - `Edit Random Group`
-  - `Detach Random Group`
-- Random group editor window:
-  - Search skills (`contains + exact ID`, limit 300)
-  - Add/remove/clear selected skills
-  - Max 15 entries, no duplicates
-  - Auto-sort by `SkillId`
-  - `use_code` = selected count (auto)
-- New group IDs are generated automatically without collisions.
-- Manual `Grp` entry with unknown positive ID auto-creates placeholder group (`use_code=0`).
-- Random groups are shown in UI with `RND[GroupId]` badge and detailed tooltip.
+- Inline editing of `SkillTreeResource` rows
+- Right-click actions for:
+  - editing a skill
+  - deleting a row
+  - creating a random skill group
+  - editing a random skill group
+  - detaching a random skill group
+- Dirty row highlighting for staged changes
+- Effective skills view synchronized with the currently active evolution stage
+
+### Skill editing
+
+- Dedicated skill editor for `SkillResource`
+- Business-field editing and advanced raw-field editing
+- Staged updates integrated into the global save and review flow
+
+### Random skill groups
+
+- Full support for `SummonRandomSkillResource`
+- Recognition of `skill_group_id` in tree rows with `RND[GroupId]` badge display
+- Random group editor with:
+  - skill search by exact ID and name contains
+  - 36x36 skill icons
+  - tooltip support
+  - maximum 15 entries
+  - duplicate prevention
+  - automatic sorting by `SkillId`
+  - automatic `use_code = selected.Count`
+- Automatic group ID allocation based on both:
+  - `SummonRandomSkillResource.sid`
+  - `SkillTreeResource.skill_group_id`
+- Manual positive `Grp` entry can create an empty placeholder group automatically
+- Shared group usage warnings with clone-or-edit-in-place decision during save
 
 ### Stat scaling editor
 
-- Open modal `Stats` window for final summon.
-- 3 sections:
-  - Base stats (`StatResource`)
-  - Growth bonuses (`CreatureLevelBonus`)
-  - Calculator (level + breakdown)
-- Calculator supports:
-  - Level range `1..350`
-  - `Enhance Stage` `0..5`
+- Modal stats window for the selected final summon
+- Editable data sources:
+  - `StatResource`
+  - `CreatureLevelBonus`
+- Live calculator using:
+  - level range `1..350`
+  - enhance stage range `0..5`
   - `CreatureEnhance.stat_amplify`
-  - `FinalRaw` and enhanced `Final`
+- Displays raw and enhanced final values
 
-### Save workflow
+### Save, review, and export
 
-- All edits are staged first.
-- Save opens review window with change list.
-- Save mode toggle:
-  - `DB` -> write to MSSQL
-  - `.sql` -> generate SQL script only
-- In `DB` mode, global pre-save confirm shows destination DB and payload summary.
-- Shared usage warnings are supported (skill/tree/stat/random group impacts, clone-or-in-place decisions where applicable).
-- Unsaved-change guard when switching summon: `Save / Discard / Cancel`.
+- All edits are staged first
+- Save always goes through review
+- Save target toggle:
+  - `DB` for direct MSSQL write
+  - `.sql` for diff export without touching the database
+- Global pre-save confirmation before database commit
+- Shared usage warnings for skills, skill trees, stats, growth bonuses, and random groups
+- Unsaved-change protection when switching to another summon:
+  - `Save`
+  - `Discard`
+  - `Cancel`
 
-### Assets and visuals
+### Assets and UI
 
-- Default dump folder is auto-set to `%USERPROFILE%\Desktop\Dump` if empty (folder auto-created).
-- Recursive asset index for summon/skill images.
-- Built-in 36x36 fallback icon for missing assets: `common_mark_icon_unknown_middle.jpg`.
-- Embedded branding assets (`Logo.ico`, `Heaven_logo1.png`).
-- Dark grayscale UI with unified scrollbars and readable contrast.
+- Default dump folder auto-falls back to `%USERPROFILE%\Desktop\Dump` when empty
+- Recursive asset indexing for summon and skill images
+- Embedded branding assets and default 36x36 fallback icon
+- Dark grayscale UI with custom scrollbars and game-oriented tooltip rendering
 
 ## Requirements
 
 - Windows
 - .NET 10 Desktop Runtime
-- MSSQL access to your game database
+- MSSQL access to the target Rappelz database
 
-## Install / First Setup (Release Build)
+## Installation
 
-1. Publish or copy released files to:
-   - `C:\Users\<you>\Documents\YSMReleasedTools\YSMSummonEditor\`
-2. In repository root, create local env file:
-   - `.env.local` (not committed)
-3. Put DB connection there, for example:
+### Release output
+
+Published builds are written to:
+
+`C:\Users\<you>\Documents\YSMReleasedTools\YSMSummonEditor\`
+
+The release output is intentionally kept minimal. The publish script removes non-runtime artifacts and keeps only the executable and config/json-style runtime files when they exist.
+
+### Local database bootstrap
+
+Create a local `.env.local` file in the repository root. This file is ignored by git.
+
+Example:
 
 ```env
 YSM_DB_PROVIDER=MSSQL
 YSM_DB_CONNECTION_STRING=Server=127.0.0.1,1433;Database=YourDb;User Id=YourUser;Password=YourPass;TrustServerCertificate=True;
 ```
 
-4. Run `YSMSummonEditor.exe`.
-5. Open `Settings` and confirm:
-   - DB settings
-   - Dump folder path (defaults to Desktop\Dump only when empty)
+Tracked template:
+
+`./.env.local.template`
+
+## First Run
+
+1. Start `YSMSummonEditor.exe`
+2. Open `Settings`
+3. Confirm the database connection
+4. Confirm the dump folder path
+
+If no dump path is stored yet, the application defaults to:
+
+`%USERPROFILE%\Desktop\Dump`
+
+That folder is created automatically if missing.
 
 ## Build From Source
 
@@ -106,20 +142,16 @@ dotnet test YSMSummonEditor.slnx -c Release
 powershell -ExecutionPolicy Bypass -File .\scripts\publish-release.ps1
 ```
 
-Output:
+Publish target:
 
-- `C:\Users\<you>\Documents\YSMReleasedTools\YSMSummonEditor\`
-- Framework-dependent, clean output (`.pdb` and `.xml` removed)
+`C:\Users\<you>\Documents\YSMReleasedTools\YSMSummonEditor\`
 
 ## Runtime Files
 
-- User settings:
-  - `%LocalAppData%\YSMSummonEditor\settings.json`
-- Local DB bootstrap:
-  - `.env.local` in repo root (ignored by git)
-  - `.env.local.template` is tracked template
+- User settings: `%LocalAppData%\YSMSummonEditor\settings.json`
+- Local DB bootstrap: `./.env.local`
 
-## Main Data Tables Used
+## Main Data Sources
 
 - `SummonResource`
 - `SkillTreeResource`
@@ -130,3 +162,13 @@ Output:
 - `CreatureEnhance`
 - `StringResource`
 - `ItemResource`
+
+## Tech Stack
+
+- `WPF`
+- `.NET 10`
+- `WPF-UI`
+- `ModernWpf`
+- `CommunityToolkit.Mvvm`
+- `Microsoft.Extensions.Hosting`
+- `YSMLib`
