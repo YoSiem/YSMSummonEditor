@@ -10,6 +10,8 @@ use crate::theme::color;
 use crate::widgets::{self, modal};
 use crate::worker::Event;
 
+const LIST_HEIGHT: f32 = 432.0;
+
 pub struct SkillPickerDialog {
     purpose: PickerPurpose,
     search: SkillSearch,
@@ -33,7 +35,14 @@ impl SkillPickerDialog {
         let mut cancelled = false;
 
         let outcome = modal::show(ctx, id, icons::ADD_SKILL, color::ACCENT_BRIGHT, title, 520.0, |ui| {
-            if let SearchInteraction::Activated(skill) = self.search.show(ui, env, 420.0, |_| false) {
+            widgets::control_row(
+                ui,
+                |ui| {
+                    widgets::section_title(ui, "All skills");
+                },
+                |ui| self.search.status(ui),
+            );
+            if let SearchInteraction::Activated(skill) = self.search.show(ui, env, LIST_HEIGHT, |_| false) {
                 picked = Some(skill);
             }
 
@@ -42,12 +51,12 @@ impl SkillPickerDialog {
                     cancelled = true;
                 }
                 let selected = self.search.selected_skill().cloned();
-                ui.add_enabled_ui(selected.is_some(), |ui| {
-                    if widgets::primary_button(ui, icons::CHECK, "Select").clicked() {
-                        picked = selected;
-                    }
+                if widgets::primary_button_enabled(ui, selected.is_some(), icons::CHECK, "Select").clicked() {
+                    picked = selected;
+                }
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    ui.label(widgets::caption("Double-click a skill or press Enter to pick it."));
                 });
-                ui.label(widgets::muted("Double-click or press Enter to pick").small());
             });
         });
 

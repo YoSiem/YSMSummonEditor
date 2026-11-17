@@ -2,18 +2,17 @@
 
 use std::time::{Duration, Instant};
 
-use eframe::egui::{self, Align2, CornerRadius, FontId, Key, Margin, Sense, Stroke, StrokeKind, Ui, Vec2};
+use eframe::egui::{self, Align2, Color32, CornerRadius, Key, Sense, Ui, Vec2};
 use ysm_core::model::SkillDisplay;
 
 use super::{DialogContext, next_generation};
 use crate::action::Action;
 use crate::icons;
-use crate::theme::{self, color};
+use crate::theme::{self, color, space};
 use crate::widgets::{self, game_tooltip};
 use crate::worker::{Command, Event};
 
 const DEBOUNCE: Duration = Duration::from_millis(250);
-const ROW_HEIGHT: f32 = 42.0;
 
 /// What the user did with the result list this frame.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -69,7 +68,7 @@ impl SkillSearch {
             }
             Err(error) => {
                 self.results.clear();
-                self.error = Some(error.clone());
+                self.error = Some(error.message.clone());
             }
         }
     }
@@ -81,7 +80,21 @@ impl SkillSearch {
         actions.push(Action::Command(Command::SearchSkills { text: self.query.trim().to_owned(), generation }));
     }
 
-    /// Draws the search box and the result list. `is_disabled` greys out skills that cannot be picked.
+    /// The state of the search as a caption: a spinner, an error or the result count.
+    pub fn status(&self, ui: &mut Ui) {
+        if let Some(error) = &self.error {
+            ui.label(widgets::caption(format!("{}  Search failed", icons::ERROR)).color(color::DANGER))
+                .on_hover_text(error.as_str());
+        } else if self.awaiting.is_some() {
+            ui.label(widgets::caption("Searching…"));
+            ui.add(egui::Spinner::new().size(theme::CAPTION_SIZE));
+        } else {
+            ui.label(widgets::caption(format!("{} skills", self.results.len())));
+        }
+    }
+
+    /// Draws the search box and, below it, the result list of `list_height`.
+    /// `is_disabled` greys out skills that cannot be picked.
     pub fn show(
         &mut self,
         ui: &mut Ui,
@@ -92,10 +105,9 @@ impl SkillSearch {
         let mut interaction = SearchInteraction::None;
 
         let search = ui.add(
-            egui::TextEdit::singleline(&mut self.query)
+            widgets::text_field(&mut self.query)
                 .hint_text(format!("{}  Skill ID or name", icons::SEARCH))
-                .desired_width(f32::INFINITY)
-                .margin(Margin::symmetric(8, 6)),
+                .desired_width(f32::INFINITY),
         );
         if !self.started {
             self.started = true;
@@ -124,41 +136,35 @@ impl SkillSearch {
             }
         }
 
-        ui.horizontal(|ui| {
-            if self.awaiting.is_some() {
-                ui.spinner();
-                ui.label(widgets::muted("Searching…").small());
-            } else if let Some(error) = &self.error {
-                ui.colored_label(color::DANGER, format!("{}  {error}", icons::ERROR));
-            } else {
-                ui.label(widgets::muted(format!("{} skills", self.results.len())).small());
+        skill_list(ui, "skill-search-results", list_height, |ui| {
+            for skill in &self.results {
+                let disabled = is_disabled(skill.skill_id);
+                let selected = self.selected == Some(skill.skill_id);
+                let response = skill_row(ui, env, skill, selected, disabled, None);
+                if response.clicked() {
+                    self.selected = Some(skill.skill_id);
+                }
+                if response.double_clicked() && !disabled {
+                    interaction = SearchInteraction::Activated(skill.clone());
+                }
             }
-        });
-
-        egui::Frame::new().fill(color::INPUT_BG).corner_radius(6).inner_margin(4).show(ui, |ui| {
-            ui.spacing_mut().item_spacing.y = 2.0;
-            egui::ScrollArea::vertical()
-                .id_salt("skill-search-results")
-                .auto_shrink(false)
-                .max_height(list_height)
-                .min_scrolled_height(list_height)
-                .show_rows(ui, ROW_HEIGHT, self.results.len(), |ui, range| {
-                    for skill in &self.results[range] {
-                        let disabled = is_disabled(skill.skill_id);
-                        let selected = self.selected == Some(skill.skill_id);
-                        let response = skill_row(ui, env, skill, selected, disabled, None);
-                        if response.clicked() {
-                            self.selected = Some(skill.skill_id);
-                        }
-                        if response.double_clicked() && !disabled {
-                            interaction = SearchInteraction::Activated(skill.clone());
-                        }
-                    }
-                });
         });
 
         interaction
     }
+}
+
+/// A recessed, scrollable list of skills with a fixed height.
+pub fn skill_list(ui: &mut Ui, id_salt: &str, height: f32, add_rows: impl FnOnce(&mut Ui)) {
+    theme::well().show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        egui::ScrollArea::vertical()
+            .id_salt(id_salt)
+            .auto_shrink(false)
+            .max_height(height)
+            .min_scrolled_height(height)
+            .show(ui, add_rows);
+    });
 }
 
 /// One skill in a list: icon, name, ID and an optional leading slot number.
@@ -170,47 +176,49 @@ pub fn skill_row(
     disabled: bool,
     slot: Option<usize>,
 ) -> egui::Response {
-    let (rect, response) = ui.allocate_exact_size(Vec2::new(ui.available_width(), ROW_HEIGHT), Sense::click());
+    let size = Vec2::new(ui.available_width(), theme::LIST_ROW_HEIGHT);
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
     if !ui.is_rect_visible(rect) {
         return response;
     }
 
+    let highlight = rect.shrink2(Vec2::new(0.0, 1.0));
     if selected {
-        ui.painter().rect_filled(rect, CornerRadius::same(theme::RADIUS), color::ROW_SELECTED);
+        ui.painter().rect_filled(highlight, CornerRadius::same(theme::RADIUS), color::ROW_SELECTED);
     } else if response.hovered() {
-        ui.painter().rect_filled(rect, CornerRadius::same(theme::RADIUS), color::ROW_HOVER);
+        ui.painter().rect_filled(highlight, CornerRadius::same(theme::RADIUS), color::ROW_HOVER);
     }
 
-    let mut left = rect.left() + 6.0;
+    let mut left = rect.left() + space::SM;
     if let Some(slot) = slot {
+        // Slot numbers are right-aligned in a fixed column, so the icons line up.
+        let column = 20.0;
         ui.painter().text(
-            egui::pos2(left + 10.0, rect.center().y),
-            Align2::CENTER_CENTER,
+            egui::pos2(left + column, rect.center().y),
+            Align2::RIGHT_CENTER,
             slot.to_string(),
-            FontId::proportional(12.0),
+            theme::caption(),
             color::TEXT_MUTED,
         );
-        left += 26.0;
+        left += column + space::SM;
     }
 
-    let icon_size = 32.0;
-    let icon_rect =
-        egui::Rect::from_min_size(egui::pos2(left, rect.center().y - icon_size / 2.0), Vec2::splat(icon_size));
-    let radius = CornerRadius::same(4);
+    let icon_rect = egui::Rect::from_center_size(
+        egui::pos2(left + theme::ICON_SIZE / 2.0, rect.center().y),
+        Vec2::splat(theme::ICON_SIZE),
+    );
     let texture = env.textures.icon(skill.icon_file_name.as_deref());
-    let tint = if disabled { egui::Color32::from_gray(110) } else { egui::Color32::WHITE };
-    egui::Image::from_texture((texture, icon_rect.size())).corner_radius(radius).tint(tint).paint_at(ui, icon_rect);
-    ui.painter().rect_stroke(icon_rect, radius, Stroke::new(1.0, color::CONTROL_BORDER), StrokeKind::Inside);
+    let tint = if disabled { Color32::from_gray(110) } else { Color32::WHITE };
+    widgets::paint_game_icon(ui, texture, icon_rect, tint);
 
-    let text_left = icon_rect.right() + 10.0;
-    let painter = ui.painter().with_clip_rect(rect.shrink2(Vec2::new(6.0, 0.0)));
-    let name_color = if disabled { color::TEXT_FAINT } else { color::TEXT };
+    let text_left = icon_rect.right() + space::MD;
+    let painter = ui.painter().with_clip_rect(rect.shrink2(Vec2::new(space::SM, 0.0)));
     painter.text(
-        egui::pos2(text_left, rect.center().y - 8.0),
+        egui::pos2(text_left, rect.center().y - 9.0),
         Align2::LEFT_CENTER,
         &skill.skill_name,
-        FontId::proportional(13.5),
-        name_color,
+        theme::body(),
+        if disabled { color::TEXT_DISABLED } else { color::TEXT },
     );
     let detail =
         if disabled { format!("{}  ·  already in the group", skill.skill_id) } else { skill.skill_id.to_string() };
@@ -218,8 +226,8 @@ pub fn skill_row(
         egui::pos2(text_left, rect.center().y + 9.0),
         Align2::LEFT_CENTER,
         detail,
-        FontId::proportional(11.5),
-        color::TEXT_MUTED,
+        theme::caption(),
+        if disabled { color::TEXT_DISABLED } else { color::TEXT_MUTED },
     );
 
     response.on_hover_ui(|ui| game_tooltip::skill(ui, skill.skill_id, Some(skill)))

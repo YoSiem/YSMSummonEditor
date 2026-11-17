@@ -71,7 +71,7 @@ impl EditorApp {
         let loading = self.state.summons_loading
             || self.state.chain_loading
             || self.busy.is_some()
-            || !self.state.connection.is_ready()
+            || self.state.connection == crate::state::ConnectionStatus::Connecting
             || self.state.asset_count.is_none();
         if loading {
             script.wait = SETTLE_FRAMES;

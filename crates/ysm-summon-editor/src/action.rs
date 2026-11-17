@@ -48,6 +48,8 @@ pub enum Action {
     DiscardAll,
     OpenStats,
     OpenSettings,
+    /// Drop the current connection and connect again with the saved settings.
+    Reconnect,
     SetSaveToSql(bool),
 
     // ---- tree panel ----

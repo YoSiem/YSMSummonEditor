@@ -21,7 +21,7 @@
 YSM Summon Editor is a single executable with nothing to install. Every edit is staged first, reviewed before it is saved, and then either written to MSSQL in one transaction or exported as an executable `.sql` script.
 
 > [!WARNING]
-> **0.1.0-alpha.** This release is a full rewrite of the original WPF/.NET editor in Rust. The SQL was carried over statement for statement, but the database layer has not yet been validated against a live server. Back up your database, and use **Save to `.sql`** to inspect what would be written before saving to the database directly.
+> **Alpha.** This is a full rewrite of the original WPF/.NET editor in Rust. The SQL was carried over statement for statement, but the database layer has not yet been validated against a live server. Back up your database, and use **Save to `.sql`** to inspect what would be written before saving to the database directly.
 
 ## Contents
 

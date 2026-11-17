@@ -1,4 +1,8 @@
 //! Base stats, growth bonuses and the live scaling calculator of a summon.
+//!
+//! Three sections stand side by side. Each has a title, a caption, a header
+//! row and one row per stat, all of fixed height, so STR, VIT … LUK run in
+//! straight lines across the whole dialog.
 
 use std::collections::BTreeMap;
 
@@ -12,35 +16,29 @@ use ysm_core::scaling_edit::{ScalingDraft, round_bonus};
 use super::DialogContext;
 use crate::action::Action;
 use crate::icons;
-use crate::theme::{self, color};
+use crate::theme::{self, color, space};
 use crate::widgets::{self, modal};
 
-/// One colour per stat, used for the growth chart and its legend.
+/// One colour per stat, used for the stat names and the growth chart.
 const STAT_COLORS: [Color32; STAT_COUNT] = [
-    Color32::from_rgb(0xEB, 0x6B, 0x6B),
-    Color32::from_rgb(0xF2, 0x99, 0x4A),
-    Color32::from_rgb(0xF2, 0xC9, 0x4C),
-    Color32::from_rgb(0x6F, 0xCF, 0x97),
-    Color32::from_rgb(0x56, 0xCC, 0xF2),
-    Color32::from_rgb(0xBB, 0x8F, 0xEB),
-    Color32::from_rgb(0xD4, 0xA5, 0xC9),
+    Color32::from_rgb(0xF8, 0x71, 0x6B),
+    Color32::from_rgb(0xF0, 0x9A, 0x4F),
+    Color32::from_rgb(0xE3, 0xC1, 0x4F),
+    Color32::from_rgb(0x5F, 0xC9, 0x77),
+    Color32::from_rgb(0x56, 0xBF, 0xE8),
+    Color32::from_rgb(0xA9, 0x8B, 0xF0),
+    Color32::from_rgb(0xE0, 0x8F, 0xC2),
 ];
 
-/// Horizontal space a section's frame adds around its content (margins and border).
-const SECTION_CHROME: f32 = 22.0;
-const SECTION_HEIGHT: f32 = 452.0;
-
-/// A titled card of fixed width. The content is laid out top to bottom
-/// regardless of the layout the card itself sits in.
-fn section(ui: &mut Ui, width: f32, add_contents: impl FnOnce(&mut Ui)) {
-    theme::card().fill(color::PANEL_ALT).show(ui, |ui| {
-        ui.vertical(|ui| {
-            ui.set_width(width);
-            ui.set_min_height(SECTION_HEIGHT);
-            add_contents(ui);
-        });
-    });
-}
+/// Height of a section's header row (two lines of caption text).
+const HEADER_HEIGHT: f32 = 36.0;
+const STAT_COLUMN_WIDTH: f32 = 40.0;
+const BASE_FIELD_WIDTH: f32 = 88.0;
+const BONUS_FIELD_WIDTH: f32 = 88.0;
+const RESULT_COLUMN_WIDTH: f32 = 48.0;
+const CHART_HEIGHT: f32 = 136.0;
+/// Space either side of the hairline between two sections.
+const SECTION_GAP: f32 = space::XL;
 
 pub struct StatScalingDialog {
     summon_name: String,
@@ -78,15 +76,7 @@ impl StatScalingDialog {
         let mut apply = false;
         let mut cancelled = false;
 
-        let outcome = modal::show(ctx, id, icons::STATS, color::ACCENT_BRIGHT, &title, 1180.0, |ui| {
-            ui.label(widgets::muted(format!(
-                "Summon {}  ·  Stat ID {}  ·  Evolution depth {}",
-                self.draft.summon_id(),
-                self.draft.stat_id(),
-                self.draft.growth_depth()
-            )));
-            ui.add_space(4.0);
-
+        let outcome = modal::show(ctx, id, icons::STATS, color::ACCENT_BRIGHT, &title, 1184.0, |ui| {
             let snapshot = self.draft.snapshot();
             let result = scaling::calculate(&ScalingInput {
                 level: self.level,
@@ -99,17 +89,22 @@ impl StatScalingDialog {
                 self.curve_inputs = Some((snapshot, self.enhance_stage));
             }
 
-            // Fixed widths for the two editors; the calculator takes whatever is left.
-            let base_width = 150.0;
-            let growth_width = 60.0 + 100.0 * self.draft.bonuses.len() as f32;
-            let gaps = 2.0 * ui.spacing().item_spacing.x + 3.0 * SECTION_CHROME;
-            let calculator_width = (ui.available_width() - base_width - growth_width - gaps).max(420.0);
+            let stages = self.draft.bonuses.len() as f32;
+            let base_width = STAT_COLUMN_WIDTH + space::MD + BASE_FIELD_WIDTH;
+            let growth_width = STAT_COLUMN_WIDTH + stages * (space::MD + BONUS_FIELD_WIDTH);
+            let dividers = 2.0 * (2.0 * SECTION_GAP + 1.0);
+            let calculator_width = (ui.available_width() - base_width - growth_width - dividers).max(480.0);
+
             ui.horizontal_top(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
                 section(ui, base_width, |ui| self.base_stats(ui));
+                section_divider(ui);
                 section(ui, growth_width, |ui| self.growth_bonuses(ui));
+                section_divider(ui);
                 section(ui, calculator_width, |ui| self.calculator(ui, &result));
             });
 
+            let dirty = self.draft.is_dirty();
             modal::footer(ui, |ui| {
                 if widgets::button(ui, icons::CLOSE, "Cancel").clicked() {
                     cancelled = true;
@@ -117,18 +112,13 @@ impl StatScalingDialog {
                 if widgets::primary_button(ui, icons::CHECK, "Apply").clicked() {
                     apply = true;
                 }
-                if ui
-                    .add_enabled(
-                        self.draft.is_dirty(),
-                        egui::Button::new(widgets::icon_text(icons::DISCARD, "Reset to database")),
-                    )
-                    .clicked()
-                {
+                ui.add_space(space::MD);
+                if widgets::button_enabled(ui, dirty, icons::DISCARD, "Reset to database").clicked() {
                     self.draft.reset();
                 }
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                    let text = if self.draft.is_dirty() { "Values differ from the database." } else { "No changes." };
-                    ui.label(widgets::muted(text));
+                    let text = if dirty { "Values differ from the database." } else { "No changes." };
+                    ui.label(widgets::caption(text));
                 });
             });
         });
@@ -142,50 +132,51 @@ impl StatScalingDialog {
     }
 
     fn base_stats(&mut self, ui: &mut Ui) {
-        modal::caption(ui, "Base stats");
-        ui.label(widgets::muted("StatResource").small());
-        ui.add_space(4.0);
-        egui::Grid::new("base-stats").num_columns(2).spacing([14.0, 7.0]).show(ui, |ui| {
+        section_heading(ui, "Base stats", &format!("StatResource {}", self.draft.stat_id()));
+        stat_grid(ui, "base-stats", 2, |ui| {
+            header(ui, STAT_COLUMN_WIDTH, "Stat", "", Align::Min);
+            header(ui, BASE_FIELD_WIDTH, "Base", "", Align::Min);
+            ui.end_row();
+
             for stat in Stat::ALL {
-                let dirty = self.draft.is_base_stat_dirty(stat);
-                stat_label(ui, stat, dirty);
-                ui.add(egui::DragValue::new(&mut self.draft.base[stat.index()]).speed(0.2).range(0..=1_000_000));
+                stat_name(ui, stat, self.draft.is_base_stat_dirty(stat));
+                let value = &mut self.draft.base[stat.index()];
+                let field = egui::DragValue::new(value).speed(0.2).range(0..=1_000_000);
+                ui.add_sized([BASE_FIELD_WIDTH, theme::CONTROL_HEIGHT], field);
                 ui.end_row();
             }
         });
     }
 
     fn growth_bonuses(&mut self, ui: &mut Ui) {
-        modal::caption(ui, "Growth bonus per level");
-        ui.label(widgets::muted("CreatureLevelBonus").small());
-        ui.add_space(4.0);
-        egui::Grid::new("growth-bonus").num_columns(1 + self.draft.bonuses.len()).spacing([12.0, 7.0]).show(ui, |ui| {
-            ui.label("");
+        section_heading(ui, "Growth bonus per level", "CreatureLevelBonus, one row per growth stage");
+        stat_grid(ui, "growth-bonus", 1 + self.draft.bonuses.len(), |ui| {
+            header(ui, STAT_COLUMN_WIDTH, "Stat", "", Align::Min);
             for bonus in &self.draft.bonuses {
-                ui.vertical(|ui| {
-                    ui.spacing_mut().item_spacing.y = 0.0;
-                    let stage = RichText::new(format!("Stage {}", bonus.stage_index)).font(theme::bold(13.0));
-                    ui.add(egui::Label::new(stage).extend());
-                    let id = widgets::muted(format!("ID {}", bonus.lookup_id)).small();
+                let id = if bonus.exists_in_db {
+                    format!("ID {}", bonus.lookup_id)
+                } else {
+                    format!("ID {} · new", bonus.lookup_id)
+                };
+                header(ui, BONUS_FIELD_WIDTH, &format!("Stage {}", bonus.stage_index), &id, Align::Min).on_hover_text(
                     if bonus.exists_in_db {
-                        ui.add(egui::Label::new(id).extend());
+                        "Existing CreatureLevelBonus row."
                     } else {
-                        ui.add(egui::Label::new(id.color(color::WARNING)).extend())
-                            .on_hover_text("No row in the database yet; it is created when a value is saved.");
-                    }
-                });
+                        "No row in the database yet; it is created when a value is saved."
+                    },
+                );
             }
             ui.end_row();
 
             for stat in Stat::ALL {
                 let dirty = self.draft.bonuses.iter().any(|bonus| bonus.is_stat_dirty(stat));
-                stat_label(ui, stat, dirty);
+                stat_name(ui, stat, dirty);
                 for bonus in &mut self.draft.bonuses {
                     let value = &mut bonus.values[stat.index()];
                     let mut number = value.to_f64().unwrap_or(0.0);
-                    let drag =
+                    let field =
                         egui::DragValue::new(&mut number).speed(0.005).fixed_decimals(4).range(-10_000.0..=10_000.0);
-                    if ui.add_sized([88.0, 22.0], drag).changed()
+                    if ui.add_sized([BONUS_FIELD_WIDTH, theme::CONTROL_HEIGHT], field).changed()
                         && let Some(updated) = Decimal::from_f64(number)
                     {
                         *value = round_bonus(updated);
@@ -197,58 +188,64 @@ impl StatScalingDialog {
     }
 
     fn calculator(&mut self, ui: &mut Ui, result: &ScalingResult) {
-        modal::caption(ui, "Calculator");
-        ui.horizontal(|ui| {
-            ui.spacing_mut().slider_width = 130.0;
-            ui.label("Level");
-            ui.add(egui::Slider::new(&mut self.level, MIN_LEVEL..=MAX_LEVEL));
-            ui.add_space(10.0);
-            ui.label("Enhance");
-            ui.add(egui::Slider::new(&mut self.enhance_stage, 0..=MAX_ENHANCE_STAGE));
-        });
         let percent = (result.stat_amplify * Decimal::from(100)).normalize();
-        ui.label(widgets::muted(format!(
-            "Level {} · enhance stage {} · stat amplify +{percent}%",
-            result.effective_level, result.effective_enhance_stage
-        )));
-        ui.add_space(4.0);
+        section_heading(
+            ui,
+            "Calculator",
+            &format!(
+                "Level {} · enhance stage {} · stat amplify +{percent}%",
+                result.effective_level, result.effective_enhance_stage
+            ),
+        );
 
-        egui::Grid::new("scaling-result").num_columns(9).striped(true).spacing([14.0, 6.0]).show(ui, |ui| {
-            for title in ["Stat", "Base", "Growth 1", "Growth 2", "Growth 3", "Bonus", "Raw", "Final", "Δ / lv"] {
-                ui.label(RichText::new(title).small().color(color::TEXT_MUTED));
+        stat_grid(ui, "scaling-result", 9, |ui| {
+            header(ui, STAT_COLUMN_WIDTH, "Stat", "", Align::Min);
+            for title in ["Base", "Growth 1", "Growth 2", "Growth 3", "Bonus", "Raw", "Final", "Per level"] {
+                header(ui, RESULT_COLUMN_WIDTH, title, "", Align::Max);
             }
             ui.end_row();
+
             for row in &result.rows {
-                ui.label(RichText::new(row.stat.label()).font(theme::bold(13.0)).color(STAT_COLORS[row.stat.index()]));
-                ui.label(row.base.to_string());
+                stat_name(ui, row.stat, false);
+                number(ui, row.base.to_string(), color::TEXT, false);
                 for stage in row.stage {
-                    ui.label(dimmed_zero(stage));
+                    number(ui, stage.to_string(), dimmed(stage), false);
                 }
-                ui.label(dimmed_zero(row.bonus));
-                ui.label(row.final_raw.to_string());
-                ui.label(RichText::new(row.final_value.to_string()).font(theme::bold(13.5)));
-                ui.label(RichText::new(format!("+{}", row.delta)).color(color::SUCCESS));
+                number(ui, row.bonus.to_string(), dimmed(row.bonus), false);
+                number(ui, row.final_raw.to_string(), color::TEXT, false);
+                number(ui, row.final_value.to_string(), color::TEXT, true);
+                number(ui, format!("+{}", row.delta), color::SUCCESS, false);
                 ui.end_row();
             }
         });
 
-        ui.add_space(6.0);
+        ui.add_space(space::SM);
+        ui.horizontal(|ui| {
+            ui.set_height(theme::CONTROL_HEIGHT);
+            ui.spacing_mut().slider_width = 152.0;
+            ui.label("Level");
+            ui.add(egui::Slider::new(&mut self.level, MIN_LEVEL..=MAX_LEVEL));
+            ui.add_space(space::LG);
+            ui.label("Enhance");
+            ui.add(egui::Slider::new(&mut self.enhance_stage, 0..=MAX_ENHANCE_STAGE));
+        });
         self.chart(ui);
     }
 
     /// Final stat values across all levels, with a marker at the selected level.
     fn chart(&mut self, ui: &mut Ui) {
-        let (rect, response) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 170.0), Sense::click_and_drag());
+        let (rect, response) =
+            ui.allocate_exact_size(Vec2::new(ui.available_width(), CHART_HEIGHT), Sense::click_and_drag());
         let painter = ui.painter_at(rect);
-        painter.rect_filled(rect, 6.0, color::INPUT_BG);
+        painter.rect(rect, theme::RADIUS, color::INPUT_BG, Stroke::new(1.0, color::BORDER), egui::StrokeKind::Inside);
 
-        let plot = rect.shrink2(Vec2::new(10.0, 10.0));
+        let plot = rect.shrink(space::MD);
         let max_value = self.curve.iter().flatten().copied().max().unwrap_or(1).max(1) as f32;
         let x_of =
             |level: i32| plot.left() + plot.width() * (level - MIN_LEVEL) as f32 / (MAX_LEVEL - MIN_LEVEL) as f32;
         let y_of = |value: i32| plot.bottom() - plot.height() * value as f32 / max_value;
 
-        // Evolution stage boundaries.
+        // Where the second and third growth stages begin.
         for boundary in [50, 100] {
             painter.vline(x_of(boundary), plot.y_range(), Stroke::new(1.0, color::BORDER));
         }
@@ -261,12 +258,12 @@ impl StatScalingDialog {
                 .collect();
             painter.line(points, Stroke::new(1.5, STAT_COLORS[stat.index()]));
         }
-        painter.vline(x_of(self.level), plot.y_range(), Stroke::new(1.0, Color32::WHITE));
+        painter.vline(x_of(self.level), plot.y_range(), Stroke::new(1.0, color::TEXT));
         painter.text(
             plot.left_top(),
             egui::Align2::LEFT_TOP,
-            format!("Final stats by level  ·  max {max_value:.0}"),
-            egui::FontId::proportional(11.5),
+            format!("Final stats by level · max {max_value:.0}"),
+            theme::caption(),
             color::TEXT_MUTED,
         );
 
@@ -279,12 +276,81 @@ impl StatScalingDialog {
     }
 }
 
-fn stat_label(ui: &mut Ui, stat: Stat, dirty: bool) {
-    let text = RichText::new(stat.label()).font(theme::bold(13.0));
-    ui.label(if dirty { text.color(color::DIRTY_MARK) } else { text.color(STAT_COLORS[stat.index()]) });
+/// A section of fixed width whose content runs top to bottom.
+fn section(ui: &mut Ui, width: f32, add_contents: impl FnOnce(&mut Ui)) {
+    ui.vertical(|ui| {
+        ui.set_width(width);
+        ui.spacing_mut().item_spacing = Vec2::new(space::SM, space::XS);
+        add_contents(ui);
+    });
 }
 
-fn dimmed_zero(value: i32) -> RichText {
-    let text = RichText::new(value.to_string());
-    if value == 0 { text.color(color::TEXT_FAINT) } else { text }
+/// A vertical hairline between two sections, with equal space on both sides.
+fn section_divider(ui: &mut Ui) {
+    let rows = STAT_COUNT as f32 * (theme::CONTROL_HEIGHT + space::XS);
+    let height = 44.0 + HEADER_HEIGHT + rows;
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(2.0 * SECTION_GAP + 1.0, height), Sense::hover());
+    ui.painter().vline(rect.center().x, rect.y_range(), Stroke::new(1.0, color::BORDER));
+}
+
+/// Title and caption of a section; the same height in every section.
+fn section_heading(ui: &mut Ui, title: &str, caption: &str) {
+    widgets::section_title(ui, title);
+    ui.add(egui::Label::new(widgets::caption(caption)).truncate());
+    ui.add_space(space::XS);
+}
+
+/// A grid whose rows have the standard control height.
+fn stat_grid(ui: &mut Ui, id: &str, columns: usize, add_rows: impl FnOnce(&mut Ui)) {
+    egui::Grid::new(id)
+        .num_columns(columns)
+        .spacing([space::MD, space::XS])
+        .min_row_height(theme::CONTROL_HEIGHT)
+        .show(ui, add_rows);
+}
+
+/// A header cell of fixed size: a title and an optional second line.
+fn header(ui: &mut Ui, width: f32, title: &str, detail: &str, align: Align) -> egui::Response {
+    ui.allocate_ui_with_layout(Vec2::new(width, HEADER_HEIGHT), Layout::bottom_up(align), |ui| {
+        ui.set_min_size(Vec2::new(width, HEADER_HEIGHT));
+        ui.spacing_mut().item_spacing.y = 0.0;
+        // Bottom-up: the detail line is added first so it ends up below the title.
+        if !detail.is_empty() {
+            ui.add(egui::Label::new(widgets::caption(detail)).extend().selectable(false));
+        }
+        let title = RichText::new(title).size(theme::CAPTION_SIZE).color(color::TEXT_MUTED);
+        ui.add(egui::Label::new(title).extend().selectable(false));
+    })
+    .response
+}
+
+fn stat_name(ui: &mut Ui, stat: Stat, dirty: bool) {
+    let tint = if dirty { color::DIRTY_MARK } else { STAT_COLORS[stat.index()] };
+    let text = RichText::new(stat.label()).font(theme::bold(theme::BODY_SIZE)).color(tint);
+    ui.allocate_ui_with_layout(
+        Vec2::new(STAT_COLUMN_WIDTH, theme::CONTROL_HEIGHT),
+        Layout::left_to_right(Align::Center),
+        |ui| {
+            ui.set_min_width(STAT_COLUMN_WIDTH);
+            ui.add(egui::Label::new(text).selectable(false));
+        },
+    );
+}
+
+/// A right-aligned number in a result column.
+fn number(ui: &mut Ui, text: String, tint: Color32, emphasized: bool) {
+    let text = RichText::new(text).color(tint);
+    let text = if emphasized { text.font(theme::bold(theme::BODY_SIZE)) } else { text };
+    ui.allocate_ui_with_layout(
+        Vec2::new(RESULT_COLUMN_WIDTH, theme::CONTROL_HEIGHT),
+        Layout::right_to_left(Align::Center),
+        |ui| {
+            ui.set_min_width(RESULT_COLUMN_WIDTH);
+            ui.add(egui::Label::new(text).selectable(false));
+        },
+    );
+}
+
+fn dimmed(value: i32) -> Color32 {
+    if value == 0 { color::TEXT_FAINT } else { color::TEXT }
 }

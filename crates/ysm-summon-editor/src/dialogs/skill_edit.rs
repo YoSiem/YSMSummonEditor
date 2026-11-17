@@ -8,8 +8,10 @@ use ysm_core::value::{BUSINESS_FIELDS, FieldKind, FieldValue, SkillRecord, is_bu
 use super::DialogContext;
 use crate::action::Action;
 use crate::icons;
-use crate::theme::{self, color};
-use crate::widgets::{self, modal, paint_row_background};
+use crate::theme::{self, color, space};
+use crate::widgets::{self, ColumnAlign, RowBand, Segment, header_cell, modal};
+
+const GRID_HEIGHT: f32 = 440.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Tab {
@@ -127,38 +129,34 @@ impl SkillEditDialog {
         let mut apply = false;
         let mut cancelled = false;
 
-        let outcome = modal::show(ctx, id, icons::EDIT, color::ACCENT_BRIGHT, &title, 760.0, |ui| {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 4.0;
-                let business = self.rows.iter().filter(|row| row.business).count();
-                if ui
-                    .add(egui::Button::selectable(self.tab == Tab::Business, format!("Business fields  {business}")))
-                    .clicked()
-                {
-                    self.tab = Tab::Business;
-                }
-                if ui
-                    .add(egui::Button::selectable(self.tab == Tab::All, format!("All columns  {}", self.rows.len())))
-                    .clicked()
-                {
-                    self.tab = Tab::All;
-                }
-
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    ui.spacing_mut().item_spacing.x = 8.0;
-                    ui.checkbox(&mut self.only_changed, "Changed only");
-                    ui.add(
-                        egui::TextEdit::singleline(&mut self.filter)
-                            .hint_text(format!("{}  Filter columns", icons::SEARCH))
-                            .desired_width(200.0),
-                    );
-                });
-            });
-            ui.add_space(4.0);
+        let outcome = modal::show(ctx, id, icons::EDIT, color::ACCENT_BRIGHT, &title, 784.0, |ui| {
+            let business = self.rows.iter().filter(|row| row.business).count();
+            let business_label = format!("Business fields · {business}");
+            let all_label = format!("All columns · {}", self.rows.len());
+            let segments = [
+                Segment { icon: "", label: &business_label, tooltip: "The columns that are changed most often" },
+                Segment { icon: "", label: &all_label, tooltip: "Every column of SkillResource" },
+            ];
+            let tab = &mut self.tab;
+            let filter = &mut self.filter;
+            let only_changed = &mut self.only_changed;
+            widgets::control_row(
+                ui,
+                |ui| {
+                    if let Some(index) = widgets::segmented(ui, &segments, usize::from(*tab == Tab::All), 168.0) {
+                        *tab = if index == 0 { Tab::Business } else { Tab::All };
+                    }
+                },
+                |ui| {
+                    let field = widgets::sized_text_field(filter, 200.0);
+                    ui.add(field.hint_text(format!("{}  Filter columns", icons::SEARCH)));
+                    ui.checkbox(only_changed, "Changed only");
+                },
+            );
 
             let visible = self.visible_rows();
             if visible.is_empty() {
-                ui.allocate_ui([ui.available_width(), 420.0].into(), |ui| {
+                ui.allocate_ui([ui.available_width(), GRID_HEIGHT + theme::HEADER_HEIGHT].into(), |ui| {
                     widgets::empty_state(
                         ui,
                         icons::SEARCH,
@@ -170,23 +168,22 @@ impl SkillEditDialog {
                 self.grid(ui, &visible);
             }
 
+            let changed = self.changed_count();
+            let has_errors = self.has_errors();
             modal::footer(ui, |ui| {
                 if widgets::button(ui, icons::CLOSE, "Cancel").clicked() {
                     cancelled = true;
                 }
-                ui.add_enabled_ui(!self.has_errors(), |ui| {
-                    if widgets::primary_button(ui, icons::CHECK, "Apply").clicked() {
-                        apply = true;
-                    }
-                });
+                if widgets::primary_button_enabled(ui, !has_errors, icons::CHECK, "Apply").clicked() {
+                    apply = true;
+                }
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                    if self.has_errors() {
-                        modal::note(ui, icons::WARNING, "Fix the highlighted values before applying.", color::WARNING);
+                    if has_errors {
+                        modal::note(ui, icons::WARNING, "Fix the highlighted values before applying.", color::DANGER);
+                    } else if changed == 0 {
+                        ui.label(widgets::caption("No changes"));
                     } else {
-                        let changed = self.changed_count();
-                        let text =
-                            if changed == 0 { "No changes".to_owned() } else { format!("{changed} column(s) changed") };
-                        ui.label(widgets::muted(text));
+                        ui.label(widgets::caption(format!("{changed} column(s) changed")));
                     }
                 });
             });
@@ -202,62 +199,54 @@ impl SkillEditDialog {
 
     fn grid(&mut self, ui: &mut Ui, visible: &[usize]) {
         let rows = &mut self.rows;
+        ui.spacing_mut().item_spacing = egui::Vec2::new(space::MD, space::XS);
         TableBuilder::new(ui)
             .id_salt(("skill-fields", self.tab == Tab::All))
             .striped(true)
             .cell_layout(Layout::left_to_right(Align::Center))
             .auto_shrink(false)
-            .min_scrolled_height(420.0)
-            .max_scroll_height(420.0)
-            .column(Column::exact(210.0).clip(true))
-            .column(Column::exact(70.0))
+            .min_scrolled_height(GRID_HEIGHT)
+            .max_scroll_height(GRID_HEIGHT)
+            .column(Column::exact(216.0).clip(true))
+            .column(Column::exact(64.0))
             .column(Column::remainder().at_least(160.0))
-            .column(Column::exact(150.0).clip(true))
-            .column(Column::exact(34.0))
-            .header(26.0, |mut header| {
-                for title in ["Column", "Type", "Value", "In database", ""] {
+            .column(Column::exact(144.0).clip(true))
+            .column(Column::exact(theme::CONTROL_HEIGHT))
+            .header(theme::HEADER_HEIGHT, |mut header| {
+                for (index, title) in ["Column", "Type", "Value", "In database", ""].into_iter().enumerate() {
                     header.col(|ui| {
-                        ui.label(RichText::new(title).small().color(color::TEXT_MUTED));
+                        if index == 0 {
+                            ui.add_space(space::SM);
+                        }
+                        header_cell(ui, title, "", ColumnAlign::Left);
                     });
                 }
             })
-            .body(|body| {
-                body.rows(32.0, visible.len(), |mut table_row| {
+            .body(|mut body| {
+                let band = RowBand { x: body.max_rect().x_range(), clip: body.ui_mut().clip_rect() };
+                body.rows(theme::ROW_HEIGHT, visible.len(), |mut table_row| {
                     let row = &mut rows[visible[table_row.index()]];
                     let dirty = row.is_dirty();
-                    let fill = dirty.then_some(color::ROW_DIRTY);
-                    let background = |ui: &Ui| {
-                        if let Some(fill) = fill {
-                            paint_row_background(ui, fill);
-                        }
-                    };
 
                     table_row.col(|ui| {
-                        background(ui);
+                        if dirty {
+                            band.paint(ui, color::ROW_DIRTY);
+                        }
+                        ui.add_space(space::SM);
                         let name = RichText::new(&row.name);
-                        ui.label(if row.business { name.font(theme::bold(13.5)) } else { name });
+                        let name = if row.business { name.font(theme::bold(theme::BODY_SIZE)) } else { name };
+                        ui.add(egui::Label::new(name).truncate());
                     });
                     table_row.col(|ui| {
-                        background(ui);
-                        ui.label(widgets::muted(row.kind.label()).small());
+                        ui.label(widgets::caption(row.kind.label()));
                     });
+                    table_row.col(|ui| value_editor(ui, row));
                     table_row.col(|ui| {
-                        background(ui);
-                        value_editor(ui, row);
-                    });
-                    table_row.col(|ui| {
-                        background(ui);
                         let original = if row.db_value.is_null() { "NULL".to_owned() } else { row.db_text.clone() };
-                        ui.label(widgets::muted(original)).on_hover_text(&row.db_text);
+                        ui.add(egui::Label::new(widgets::muted(original)).truncate()).on_hover_text(&row.db_text);
                     });
                     table_row.col(|ui| {
-                        background(ui);
-                        if dirty
-                            && ui
-                                .add(egui::Button::new(icons::DISCARD).frame(false))
-                                .on_hover_text("Restore the database value")
-                                .clicked()
-                        {
+                        if dirty && widgets::icon_button(ui, icons::DISCARD, "Restore the database value").clicked() {
                             row.text = row.db_text.clone();
                             row.error = None;
                         }
@@ -274,19 +263,19 @@ fn value_editor(ui: &mut Ui, row: &mut FieldRow) {
     }
 
     if row.kind == FieldKind::Bool {
-        let mut checked = matches!(row.text.trim().to_ascii_lowercase().as_str(), "1" | "true");
-        if ui.checkbox(&mut checked, "").changed() {
-            row.text = if checked { "1" } else { "0" }.to_owned();
+        let mut on = matches!(row.text.trim().to_ascii_lowercase().as_str(), "1" | "true");
+        if widgets::toggle(ui, &mut on, &row.name).changed() {
+            row.text = if on { "1" } else { "0" }.to_owned();
             row.validate();
         }
         return;
     }
 
-    let mut edit = egui::TextEdit::singleline(&mut row.text).desired_width(f32::INFINITY);
+    let mut field = widgets::text_field(&mut row.text).desired_width(f32::INFINITY);
     if row.error.is_some() {
-        edit = edit.text_color(color::DANGER);
+        field = field.text_color(color::DANGER);
     }
-    let response = ui.add(edit);
+    let response = ui.add(field);
     if response.changed() {
         row.validate();
     }

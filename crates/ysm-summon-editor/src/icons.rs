@@ -53,4 +53,3 @@ pub const CHANGES: &str = ph::STACK;
 
 pub const INSERTED: &str = ph::PLUS_CIRCLE;
 pub const DELETED: &str = ph::MINUS_CIRCLE;
-pub const DOT: &str = ph::CIRCLE;

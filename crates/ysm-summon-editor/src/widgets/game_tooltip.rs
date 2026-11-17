@@ -42,7 +42,7 @@ pub fn skill(ui: &mut Ui, skill_id: i32, display: Option<&SkillDisplay>) {
     ui.set_max_width(TOOLTIP_WIDTH);
     let name = display.map_or_else(|| format!("Skill {skill_id}"), |d| d.skill_name.clone());
     ui.horizontal(|ui| {
-        ui.label(RichText::new(name).font(theme::bold(14.5)));
+        ui.label(RichText::new(name).font(theme::bold(theme::BODY_SIZE)));
         ui.label(RichText::new(format!("#{skill_id}")).color(color::TEXT_MUTED));
     });
 
@@ -61,7 +61,7 @@ pub fn skill(ui: &mut Ui, skill_id: i32, display: Option<&SkillDisplay>) {
 /// Tooltip contents for a random group badge: state and candidate skills.
 pub fn random_group(ui: &mut Ui, session: &EditSession, group_id: i32) {
     ui.set_max_width(TOOLTIP_WIDTH);
-    ui.label(RichText::new(format!("Random group {group_id}")).font(theme::bold(14.0)));
+    ui.label(RichText::new(format!("Random group {group_id}")).font(theme::bold(theme::BODY_SIZE)));
 
     let (state_text, tint) = match session.group_state(group_id) {
         GroupState::Pending => ("Staged — will be written on save", color::DIRTY_MARK),

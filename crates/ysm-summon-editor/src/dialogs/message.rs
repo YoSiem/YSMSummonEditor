@@ -5,7 +5,7 @@ use eframe::egui::{self, Color32, RichText};
 use super::DialogContext;
 use crate::action::Action;
 use crate::icons;
-use crate::theme::color;
+use crate::theme::{self, color, space};
 use crate::widgets::{self, modal};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -104,8 +104,7 @@ impl MessageDialog {
             ui.add(egui::Label::new(self.text.as_str()).wrap());
 
             if !self.items.is_empty() {
-                ui.add_space(4.0);
-                egui::Frame::new().fill(color::INPUT_BG).corner_radius(6).inner_margin(8).show(ui, |ui| {
+                theme::well().inner_margin(space::SM as i8).show(ui, |ui| {
                     egui::ScrollArea::vertical().id_salt("items").max_height(200.0).auto_shrink([false, true]).show(
                         ui,
                         |ui| {
@@ -118,8 +117,7 @@ impl MessageDialog {
             }
 
             if let Some(details) = &self.details {
-                ui.add_space(4.0);
-                egui::Frame::new().fill(color::INPUT_BG).corner_radius(6).inner_margin(8).show(ui, |ui| {
+                theme::well().inner_margin(space::SM as i8).show(ui, |ui| {
                     egui::ScrollArea::vertical().id_salt("details").max_height(180.0).auto_shrink([false, true]).show(
                         ui,
                         |ui| {
@@ -142,6 +140,10 @@ impl MessageDialog {
                     if response.clicked() {
                         clicked = Some(index);
                     }
+                }
+                // Enter runs the default action, but never a destructive one.
+                if modal::enter_pressed(ui) && self.buttons.first().is_some_and(|b| b.style == ButtonStyle::Primary) {
+                    clicked = Some(0);
                 }
             });
         });

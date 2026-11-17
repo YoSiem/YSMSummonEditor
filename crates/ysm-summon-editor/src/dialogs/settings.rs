@@ -1,4 +1,7 @@
 //! Database connection and dump folder settings.
+//!
+//! A two-column form: labels in a fixed column, every control starting on
+//! one shared line, help text under the control it belongs to.
 
 use eframe::egui::{self, RichText, Ui};
 use ysm_data::AppSettings;
@@ -6,9 +9,13 @@ use ysm_data::AppSettings;
 use super::DialogContext;
 use crate::action::Action;
 use crate::icons;
-use crate::theme::color;
+use crate::theme::{self, color, space};
 use crate::widgets::{self, modal};
 use crate::worker::{Command, Event};
+
+/// Width of ordinary fields; the port field is a short numeric.
+const FIELD_WIDTH: f32 = 280.0;
+const PORT_WIDTH: f32 = 80.0;
 
 enum TestState {
     Idle,
@@ -18,7 +25,9 @@ enum TestState {
 }
 
 pub struct SettingsDialog {
+    original: AppSettings,
     working: AppSettings,
+    original_port: String,
     port_text: String,
     show_password: bool,
     test: TestState,
@@ -29,9 +38,12 @@ pub struct SettingsDialog {
 
 impl SettingsDialog {
     pub fn new(current: &AppSettings, demo: bool) -> Self {
+        let port = current.database.port.to_string();
         Self {
+            original: current.clone(),
             working: current.clone(),
-            port_text: current.database.port.to_string(),
+            original_port: port.clone(),
+            port_text: port,
             show_password: false,
             test: TestState::Idle,
             validation: None,
@@ -43,9 +55,13 @@ impl SettingsDialog {
         if let Event::ConnectionTested(result) = event {
             self.test = match result {
                 Ok(server) => TestState::Passed(server.clone()),
-                Err(error) => TestState::Failed(error.clone()),
+                Err(error) => TestState::Failed(error.message.clone()),
             };
         }
+    }
+
+    fn is_dirty(&self) -> bool {
+        self.working != self.original || self.port_text.trim() != self.original_port
     }
 
     /// Copies the port text into the settings; returns a message when the form is invalid.
@@ -70,38 +86,45 @@ impl SettingsDialog {
         let mut cancelled = false;
 
         let outcome = modal::show(ctx, id, icons::SETTINGS, color::ACCENT_BRIGHT, "Settings", 560.0, |ui| {
-            modal::caption(ui, "Database (MSSQL)");
+            ui.spacing_mut().item_spacing.y = space::MD;
+
+            widgets::section_title(ui, "Database");
             self.database_form(ui, env);
 
-            ui.add_space(10.0);
-            modal::caption(ui, "Client dump folder");
-            ui.label(
-                widgets::muted("Scanned recursively for summon and skill images (png, jpg, bmp, webp, tga, dds).")
-                    .small(),
-            );
-            let row = egui::Vec2::new(ui.available_width(), 30.0);
-            ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.add_space(space::XS);
+            widgets::divider(ui);
+            ui.add_space(space::XS);
+
+            widgets::section_title(ui, "Client dump folder");
+            widgets::form_row(ui, "Folder", |ui| {
+                ui.add(widgets::sized_text_field(&mut self.working.dump_folder_path, FIELD_WIDTH));
                 if widgets::button(ui, icons::FOLDER, "Browse").clicked()
                     && let Some(folder) = rfd::FileDialog::new().set_title("Select dump folder").pick_folder()
                 {
                     self.working.dump_folder_path = folder.to_string_lossy().into_owned();
                 }
-                ui.add(egui::TextEdit::singleline(&mut self.working.dump_folder_path).desired_width(f32::INFINITY));
             });
+            help(ui, "Scanned recursively for summon and skill images (png, jpg, bmp, webp, tga, dds).");
 
             if let Some(message) = &self.validation {
-                ui.add_space(6.0);
-                modal::note(ui, icons::WARNING, message, color::WARNING);
+                widgets::form_note(ui, |ui| modal::note(ui, icons::WARNING, message, color::DANGER));
             }
 
+            let dirty = self.is_dirty();
             modal::footer(ui, |ui| {
                 if widgets::button(ui, icons::CLOSE, "Cancel").clicked() {
                     cancelled = true;
                 }
-                if widgets::primary_button(ui, icons::SAVE, "Save").clicked() {
+                let clicked = widgets::primary_button_enabled(ui, dirty, icons::SAVE, "Save").clicked();
+                if clicked || (dirty && modal::enter_pressed(ui)) {
                     self.validation = self.validate();
                     save = self.validation.is_none();
                 }
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    if dirty {
+                        ui.label(widgets::caption("Unsaved changes"));
+                    }
+                });
             });
         });
 
@@ -109,56 +132,45 @@ impl SettingsDialog {
             env.actions.push(Action::ApplySettings(Box::new(self.working.clone())));
             return false;
         }
-        let escaped = outcome.dismissed && ctx.input(|input| input.key_pressed(egui::Key::Escape));
-        !(cancelled || escaped)
+        // Escape and a click outside only close a dialog with nothing to lose.
+        !(cancelled || (outcome.dismissed && !self.is_dirty()))
     }
 
     fn database_form(&mut self, ui: &mut Ui, env: &mut DialogContext<'_>) {
         let database = &mut self.working.database;
         let mut edited = false;
 
-        egui::Grid::new("database-form").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
-            ui.label("Server");
-            ui.horizontal(|ui| {
-                edited |= ui
-                    .add(egui::TextEdit::singleline(&mut database.server).hint_text("host or IP").desired_width(280.0))
-                    .changed();
-                ui.label("Port");
-                edited |= ui.add(egui::TextEdit::singleline(&mut self.port_text).desired_width(64.0)).changed();
-            });
-            ui.end_row();
+        widgets::form_row(ui, "Server", |ui| {
+            let field =
+                widgets::sized_text_field(&mut database.server, FIELD_WIDTH).hint_text("Host name or IP address");
+            edited |= ui.add(field).changed();
+        });
+        widgets::form_row(ui, "Port", |ui| {
+            edited |= ui.add(widgets::sized_text_field(&mut self.port_text, PORT_WIDTH)).changed();
+        });
+        widgets::form_row(ui, "Database", |ui| {
+            edited |= ui.add(widgets::sized_text_field(&mut database.database, FIELD_WIDTH)).changed();
+        });
+        widgets::form_row(ui, "User ID", |ui| {
+            edited |= ui.add(widgets::sized_text_field(&mut database.user_id, FIELD_WIDTH)).changed();
+        });
+        widgets::form_row(ui, "Password", |ui| {
+            // Narrower by the reveal button, so the row ends where the other fields end.
+            let width = FIELD_WIDTH - theme::CONTROL_HEIGHT - space::SM;
+            let field = widgets::sized_text_field(&mut database.password, width).password(!self.show_password);
+            edited |= ui.add(field).changed();
+            let (icon, hint) =
+                if self.show_password { (icons::HIDE, "Hide password") } else { (icons::SHOW, "Show password") };
+            if widgets::icon_button(ui, icon, hint).clicked() {
+                self.show_password = !self.show_password;
+            }
+        });
+        help(ui, "Stored in plain text in settings.json under %LOCALAPPDATA%\\YSMSummonEditor.");
 
-            ui.label("Database");
-            edited |= ui.add(egui::TextEdit::singleline(&mut database.database).desired_width(280.0)).changed();
-            ui.end_row();
-
-            ui.label("User ID");
-            edited |= ui.add(egui::TextEdit::singleline(&mut database.user_id).desired_width(280.0)).changed();
-            ui.end_row();
-
-            ui.label("Password");
-            ui.horizontal(|ui| {
-                edited |= ui
-                    .add(
-                        egui::TextEdit::singleline(&mut database.password)
-                            .password(!self.show_password)
-                            .desired_width(280.0),
-                    )
-                    .changed();
-                let (icon, hint) =
-                    if self.show_password { (icons::HIDE, "Hide password") } else { (icons::SHOW, "Show password") };
-                if widgets::icon_button(ui, icon, hint).clicked() {
-                    self.show_password = !self.show_password;
-                }
-            });
-            ui.end_row();
-
-            ui.label("");
-            edited |= ui
-                .checkbox(&mut database.trust_server_certificate, "Trust server certificate")
-                .on_hover_text("Accept the server's certificate without validating it (usual for local servers).")
+        widgets::form_row(ui, "Trust server certificate", |ui| {
+            edited |= widgets::toggle(ui, &mut database.trust_server_certificate, "Trust server certificate")
+                .on_hover_text("Accept the server's certificate without validating it; usual for a local server.")
                 .changed();
-            ui.end_row();
         });
 
         if edited {
@@ -166,14 +178,10 @@ impl SettingsDialog {
             self.validation = None;
         }
 
-        ui.add_space(4.0);
-        ui.horizontal(|ui| {
+        widgets::form_row(ui, "", |ui| {
             let running = matches!(self.test, TestState::Running);
-            let test = ui
-                .add_enabled(
-                    !running && !self.demo,
-                    egui::Button::new(widgets::icon_text(icons::CONNECTION, "Test connection")),
-                )
+            let label = if running { "Testing…" } else { "Test connection" };
+            let test = widgets::button_enabled(ui, !running && !self.demo, icons::CONNECTION, label)
                 .on_disabled_hover_text(if self.demo { "Not available in demo mode" } else { "Test in progress" });
             if test.clicked() {
                 self.validation = self.validate();
@@ -186,25 +194,31 @@ impl SettingsDialog {
                 TestState::Idle => {}
                 TestState::Running => {
                     ui.spinner();
-                    ui.label(widgets::muted("Connecting…"));
                 }
                 TestState::Passed(server) => {
                     ui.label(RichText::new(format!("{}  Connected", icons::SUCCESS)).color(color::SUCCESS))
                         .on_hover_text(server.as_str());
                 }
-                TestState::Failed(_) => {
-                    ui.label(RichText::new(format!("{}  Failed", icons::ERROR)).color(color::DANGER));
+                TestState::Failed(error) => {
+                    ui.label(RichText::new(format!("{}  Failed", icons::ERROR)).color(color::DANGER))
+                        .on_hover_text(error.as_str());
                 }
             }
         });
         if let TestState::Failed(error) = &self.test {
-            ui.add(egui::Label::new(RichText::new(error).small().color(color::DANGER)).wrap());
+            // The first line says what went wrong; the tooltip above holds the rest.
+            let first_line = error.lines().next().unwrap_or_default();
+            widgets::form_note(ui, |ui| {
+                ui.add(egui::Label::new(widgets::caption(first_line).color(color::DANGER)).wrap());
+            });
         }
-        ui.label(
-            widgets::muted(
-                "The password is stored in plain text in settings.json under %LOCALAPPDATA%\\YSMSummonEditor.",
-            )
-            .small(),
-        );
     }
+}
+
+/// Help text under the control of the row above it.
+fn help(ui: &mut Ui, text: &str) {
+    ui.add_space(-space::SM);
+    widgets::form_note(ui, |ui| {
+        ui.add(egui::Label::new(widgets::caption(text)).wrap());
+    });
 }

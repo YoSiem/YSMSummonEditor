@@ -3535,7 +3535,7 @@ dependencies = [
 
 [[package]]
 name = "ysm-core"
-version = "0.1.0-alpha"
+version = "0.1.1-alpha"
 dependencies = [
  "rust_decimal",
  "thiserror 2.0.21",
@@ -3543,7 +3543,7 @@ dependencies = [
 
 [[package]]
 name = "ysm-data"
-version = "0.1.0-alpha"
+version = "0.1.1-alpha"
 dependencies = [
  "rust_decimal",
  "serde",
@@ -3557,7 +3557,7 @@ dependencies = [
 
 [[package]]
 name = "ysm-summon-editor"
-version = "0.1.0-alpha"
+version = "0.1.1-alpha"
 dependencies = [
  "chrono",
  "eframe",

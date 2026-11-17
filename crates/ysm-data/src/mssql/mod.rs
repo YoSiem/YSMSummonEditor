@@ -29,13 +29,28 @@ use crate::{DataError, Result, SummonRepository};
 type SqlClient = Client<Compat<TcpStream>>;
 type SqlResult<T> = std::result::Result<T, tiberius::error::Error>;
 
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// A connection unused for this long is checked before being trusted again.
 const IDLE_CHECK_AFTER: Duration = Duration::from_secs(30);
+
+/// How long the repository waits for the server before giving up.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Timeouts {
+    /// Opening the TCP connection, and separately the TDS login.
+    pub connect: Duration,
+    /// Each server round-trip of a query or statement.
+    pub command: Duration,
+}
+
+impl Default for Timeouts {
+    fn default() -> Self {
+        Self { connect: Duration::from_secs(10), command: Duration::from_secs(30) }
+    }
+}
 
 pub struct MssqlRepository {
     runtime: Runtime,
     settings: DbSettings,
+    timeouts: Timeouts,
     client: Option<SqlClient>,
     last_used: Instant,
 }
@@ -43,16 +58,20 @@ pub struct MssqlRepository {
 impl MssqlRepository {
     /// Creates the repository. No connection is opened until the first query.
     pub fn new(settings: DbSettings) -> Result<Self> {
+        Self::with_timeouts(settings, Timeouts::default())
+    }
+
+    pub fn with_timeouts(settings: DbSettings, timeouts: Timeouts) -> Result<Self> {
         if !settings.is_configured() {
             return Err(DataError::NotConfigured);
         }
         let runtime = tokio::runtime::Builder::new_current_thread().enable_io().enable_time().build()?;
-        Ok(Self { runtime, settings, client: None, last_used: Instant::now() })
+        Ok(Self { runtime, settings, timeouts, client: None, last_used: Instant::now() })
     }
 
     /// Runs one database operation, opening the connection first when needed.
     fn run<T>(&mut self, operation: impl AsyncFnOnce(&mut SqlClient) -> SqlResult<T>) -> Result<T> {
-        let Self { runtime, settings, client, last_used } = self;
+        let Self { runtime, settings, timeouts, client, last_used } = self;
         runtime.block_on(async {
             if let Some(existing) = client.as_mut()
                 && last_used.elapsed() > IDLE_CHECK_AFTER
@@ -63,17 +82,19 @@ impl MssqlRepository {
 
             let connection = match client {
                 Some(connection) => connection,
-                None => client.insert(connect(settings).await?),
+                None => client.insert(connect(settings, *timeouts).await?),
             };
             let outcome = operation(connection).await;
             *last_used = Instant::now();
 
             outcome.map_err(|error| {
-                // Errors reported by the server leave the connection usable; anything else does not.
-                if !matches!(error, tiberius::error::Error::Server(_)) {
+                let failure = classify(&error, timeouts.command);
+                // Errors reported by the server leave the connection usable. After anything
+                // else it is out of sync with the server and must not be reused.
+                if failure.is_connection_problem() {
                     *client = None;
                 }
-                DataError::Query(describe(&error))
+                failure
             })
         })
     }
@@ -86,7 +107,19 @@ async fn is_alive(client: &mut SqlClient) -> bool {
     }
 }
 
-async fn connect(settings: &DbSettings) -> Result<SqlClient> {
+/// Sorts a driver error into "the server said no" versus "the connection is gone".
+fn classify(error: &tiberius::error::Error, command_timeout: Duration) -> DataError {
+    use tiberius::error::Error;
+    match error {
+        Error::Server(_) => DataError::Query(describe(error)),
+        Error::Io { kind: std::io::ErrorKind::TimedOut, .. } => {
+            DataError::Timeout(format!("no response within {} s; the connection was closed", command_timeout.as_secs()))
+        }
+        _ => DataError::Connection(describe(error)),
+    }
+}
+
+async fn connect(settings: &DbSettings, timeouts: Timeouts) -> Result<SqlClient> {
     let host = normalize_host(&settings.server);
     let mut config = Config::new();
     config.host(&host);
@@ -94,6 +127,7 @@ async fn connect(settings: &DbSettings) -> Result<SqlClient> {
     config.database(settings.database.trim());
     config.authentication(AuthMethod::sql_server(settings.user_id.trim(), &settings.password));
     config.application_name("YSM Summon Editor");
+    config.command_timeout(Some(timeouts.command));
     // Same as `Encrypt=False` in the original connection string: only the login is encrypted.
     config.encryption(EncryptionLevel::Off);
     if settings.trust_server_certificate {
@@ -101,13 +135,13 @@ async fn connect(settings: &DbSettings) -> Result<SqlClient> {
     }
 
     let address = config.get_addr();
-    let tcp = tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect(&address))
+    let tcp = tokio::time::timeout(timeouts.connect, TcpStream::connect(&address))
         .await
         .map_err(|_| DataError::Connection(format!("timed out connecting to {address}")))?
         .map_err(|error| DataError::Connection(format!("{address}: {error}")))?;
     tcp.set_nodelay(true).map_err(|error| DataError::Connection(error.to_string()))?;
 
-    tokio::time::timeout(CONNECT_TIMEOUT, Client::connect(config, tcp.compat_write()))
+    tokio::time::timeout(timeouts.connect, Client::connect(config, tcp.compat_write()))
         .await
         .map_err(|_| DataError::Connection(format!("timed out logging in to {address}")))?
         .map_err(|error| DataError::Connection(describe(&error)))
@@ -272,6 +306,55 @@ mod tests {
         assert!(validate(&CommitRequest { trees: vec![tree(5, true)], ..Default::default() }).is_ok());
         assert!(validate(&CommitRequest { trees: vec![tree(6, false)], ..Default::default() }).is_ok());
         assert!(validate(&CommitRequest { trees: vec![tree(6, true)], ..Default::default() }).is_err());
+    }
+
+    fn settings_for(port: u16) -> DbSettings {
+        DbSettings {
+            server: "127.0.0.1".into(),
+            port: i32::from(port),
+            database: "db".into(),
+            user_id: "user".into(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_server_that_never_answers_is_a_connection_problem_within_the_timeout() {
+        // Accepts the TCP connection and then stays silent, like a hung server.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let timeouts = Timeouts { connect: Duration::from_millis(300), command: Duration::from_millis(300) };
+        let mut repo = MssqlRepository::with_timeouts(settings_for(port), timeouts).unwrap();
+
+        let started = Instant::now();
+        let error = repo.test_connection().unwrap_err();
+
+        assert!(error.is_connection_problem(), "{error}");
+        assert!(error.to_string().contains("timed out logging in"), "{error}");
+        assert!(started.elapsed() < Duration::from_secs(5), "gave up after {:?}", started.elapsed());
+        drop(listener);
+    }
+
+    #[test]
+    fn a_closed_port_is_a_connection_problem() {
+        // Bind and immediately release a port so nothing is listening on it.
+        let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let mut repo = MssqlRepository::new(settings_for(port)).unwrap();
+
+        let error = repo.search_summons(&SummonListFilter::default()).unwrap_err();
+        assert!(matches!(error, DataError::Connection(_)), "{error}");
+    }
+
+    #[test]
+    fn driver_errors_are_classified() {
+        let timed_out = tiberius::error::Error::Io { kind: std::io::ErrorKind::TimedOut, message: "deadline".into() };
+        let broken = tiberius::error::Error::Io { kind: std::io::ErrorKind::ConnectionReset, message: "reset".into() };
+        let protocol = tiberius::error::Error::Protocol("bad token".into());
+        let command = Duration::from_secs(30);
+
+        assert!(matches!(classify(&timed_out, command), DataError::Timeout(message) if message.contains("30 s")));
+        assert!(matches!(classify(&broken, command), DataError::Connection(_)));
+        assert!(matches!(classify(&protocol, command), DataError::Connection(_)));
     }
 
     /// Smoke test against a real database. Run with

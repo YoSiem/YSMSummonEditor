@@ -1,192 +1,181 @@
-//! Centre panel: evolution and tree tabs with the editable skill tree grid.
+//! Skill tree card: tree tabs, row actions and the editable grid.
 
-use eframe::egui::{self, Align, Layout, RichText, Sense, Ui};
+use eframe::egui::{self, Align, Color32, Layout, RichText, Sense, Ui};
 use egui_extras::{Column, TableBuilder};
-use ysm_core::model::{EntryField, STAGE_COUNT, TREE_SLOTS};
+use ysm_core::model::{EntryField, TREE_SLOTS};
 use ysm_core::session::{EntryRow, TreeRef, TreeState};
 
-use super::{ViewContext, header_cell, tab, value_color};
+use super::{ViewContext, begin_card, card_divider};
 use crate::action::{Action, PickerPurpose};
 use crate::icons;
-use crate::theme::{self, color};
+use crate::theme::{self, color, space};
 use crate::widgets::int_cell::int_cell;
-use crate::widgets::{self, game_tooltip, icon_text, paint_row_background};
+use crate::widgets::{self, ColumnAlign, RowBand, Tab, game_tooltip, header_cell, icon_text, value_color};
+
+/// Room the horizontal scroll bar needs below the grid.
+const SCROLL_BAR_ALLOWANCE: f32 = 0.0;
+const ICON_COLUMN_WIDTH: f32 = theme::ICON_SIZE + space::SM;
+const SKILL_COLUMN_MIN_WIDTH: f32 = 136.0;
 
 /// Width of a number column: IDs need room for five digits, levels do not.
 fn column_width(field: EntryField) -> f32 {
     match field {
-        EntryField::SkillId => 54.0,
-        EntryField::SkillGroupId | EntryField::NeedSkillId(_) => 46.0,
-        _ => 34.0,
+        EntryField::SkillId => 56.0,
+        EntryField::SkillGroupId | EntryField::NeedSkillId(_) => 48.0,
+        _ => 36.0,
     }
 }
-
-/// Room the horizontal scroll bar needs below the grid.
-const SCROLL_BAR_ALLOWANCE: f32 = 14.0;
 
 pub fn show(ui: &mut Ui, view: &mut ViewContext<'_>) {
-    if !view.state.session.is_loaded() {
-        theme::card().show(ui, |ui| {
-            ui.set_min_size(ui.available_size());
-            widgets::empty_state(ui, icons::TREE, "No skill trees loaded", "Select a summon to edit its skill trees.");
-        });
-        return;
-    }
-
-    stage_tabs(ui, view);
-    ui.add_space(2.0);
     theme::card().show(ui, |ui| {
         ui.set_min_size(ui.available_size());
+        let state = view.state;
+        let tree = state.active_tree();
+
+        begin_card(ui);
         tree_tabs(ui, view);
-
-        let Some(tree) = view.state.active_tree() else {
-            return;
-        };
+        card_divider(ui);
         action_bar(ui, view, tree);
-        warnings(ui, view, tree);
-        ui.add_space(2.0);
 
-        if tree.tree_id <= 0 {
-            widgets::empty_state(
-                ui,
-                icons::TREE,
-                "No skill tree in this slot",
-                "The summon has no tree assigned here.",
-            );
-        } else if tree.rows.is_empty() {
-            widgets::empty_state(ui, icons::ADD_SKILL, "This tree is empty", "Use Add Row or Add Skill to start.");
-        } else {
-            grid(ui, view, tree);
-        }
-    });
-}
-
-fn stage_tabs(ui: &mut Ui, view: &mut ViewContext<'_>) {
-    let state = view.state;
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 4.0;
-        for stage in 1..=STAGE_COUNT as u8 {
-            let summon = state.session.chain().and_then(|chain| chain.stage(stage));
-            let dirty = state
-                .session
-                .stages()
-                .iter()
-                .filter(|s| s.stage == stage)
-                .flat_map(|s| &s.trees)
-                .any(TreeState::is_changed);
-            let subtitle = summon.map_or_else(|| "—".to_owned(), |s| format!("{} · {}", s.summon_name, s.summon_id));
-            let response =
-                tab(ui, state.active_stage == stage, summon.is_some(), &format!("Evolution {stage}"), &subtitle, dirty);
-            let response = match summon {
-                Some(_) => response.on_hover_text(format!("Skill trees of evolution {stage}")),
-                None => response.on_hover_text(format!("This chain has no evolution {stage}")),
-            };
-            if response.clicked() {
-                view.actions.push(Action::SetStage(stage));
+        match tree {
+            None => {
+                widgets::empty_state(
+                    ui,
+                    icons::TREE,
+                    "No skill trees loaded",
+                    "Select a summon to edit its skill trees.",
+                );
             }
+            Some(tree) if tree.tree_id <= 0 => {
+                widgets::empty_state(
+                    ui,
+                    icons::TREE,
+                    "No skill tree in this slot",
+                    "The summon has no tree assigned here.",
+                );
+            }
+            Some(tree) if tree.rows.is_empty() => {
+                widgets::empty_state(ui, icons::ADD_SKILL, "This tree is empty", "Use Add Row or Add Skill to start.");
+            }
+            Some(tree) => grid(ui, view, tree),
         }
     });
 }
 
 fn tree_tabs(ui: &mut Ui, view: &mut ViewContext<'_>) {
     let state = view.state;
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 4.0;
-        for slot in 1..=TREE_SLOTS as u8 {
+    let tabs: Vec<Tab> = (1..=TREE_SLOTS as u8)
+        .map(|slot| {
             let tree = state.session.tree(TreeRef::new(state.active_stage, slot));
             let tree_id = tree.map_or(0, |t| t.tree_id);
-            let subtitle = if tree_id > 0 { format!("#{tree_id}") } else { "—".to_owned() };
-            let dirty = tree.is_some_and(TreeState::is_changed);
-            let response =
-                tab(ui, state.active_slot == slot, tree_id > 0, &format!("SkillTree {slot}"), &subtitle, dirty)
-                    .on_hover_text(format!("Tree slot {slot}, skill_tree_id: {tree_id}"));
-            if response.clicked() {
-                view.actions.push(Action::SetSlot(slot));
+            Tab {
+                title: format!("SkillTree {slot}"),
+                subtitle: if tree_id > 0 { format!("#{tree_id}") } else { String::new() },
+                enabled: tree_id > 0,
+                dirty: tree.is_some_and(TreeState::is_changed),
+                tooltip: if tree_id > 0 {
+                    format!("Tree slot {slot}, skill_tree_id {tree_id}")
+                } else {
+                    format!("Tree slot {slot} is empty")
+                },
             }
-        }
-    });
-    ui.separator();
-}
+        })
+        .collect();
 
-fn action_bar(ui: &mut Ui, view: &mut ViewContext<'_>, tree: &TreeState) {
-    let selected = view.state.selected_row.and_then(|uid| tree.row(uid));
-    let editable = tree.is_editable();
-
-    ui.horizontal(|ui| {
-        if ui
-            .add_enabled(editable, egui::Button::new(icon_text(icons::ADD, "Add Row")))
-            .on_hover_text("Append an empty row (Insert)")
-            .clicked()
-        {
-            view.actions.push(Action::AddRow(tree.tree));
-        }
-        if ui
-            .add_enabled(editable, egui::Button::new(icon_text(icons::ADD_SKILL, "Add Skill…")))
-            .on_hover_text("Search for a skill by name and append it")
-            .clicked()
-        {
-            view.actions.push(Action::OpenSkillPicker(PickerPurpose::AddRow(tree.tree)));
-        }
-
-        ui.separator();
-        let has_row = selected.is_some();
-        if ui.add_enabled(has_row, egui::Button::new(icon_text(icons::DUPLICATE, "Duplicate"))).clicked()
-            && let Some(row) = selected
-        {
-            view.actions.push(Action::DuplicateRow(tree.tree, row.uid));
-        }
-        if ui
-            .add_enabled(has_row, egui::Button::new(icon_text(icons::DELETE, "Delete")))
-            .on_hover_text("Delete the selected row (Del)")
-            .clicked()
-            && let Some(row) = selected
-        {
-            view.actions.push(Action::AskDeleteRow(tree.tree, row.uid));
-        }
-        let has_skill = selected.is_some_and(|row| row.entry.skill_id > 0);
-        if ui.add_enabled(has_skill, egui::Button::new(icon_text(icons::EDIT, "Edit Skill"))).clicked()
-            && let Some(row) = selected
-        {
-            view.actions.push(Action::EditSkill(row.entry.skill_id));
-        }
-
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            let dirty = tree.rows.iter().filter(|row| row.is_dirty()).count();
-            let mut summary = format!("{} rows", tree.rows.len());
-            if dirty > 0 {
-                summary.push_str(&format!(" · {dirty} changed"));
-            }
-            ui.label(widgets::muted(summary).small());
-        });
-    });
-}
-
-fn warnings(ui: &mut Ui, view: &ViewContext<'_>, tree: &TreeState) {
-    let shared = view.state.session.trees_sharing_id(tree.tree);
-    if shared.is_empty() {
-        return;
+    if let Some(index) = widgets::tab_strip(ui, &tabs, usize::from(state.active_slot.saturating_sub(1))) {
+        view.actions.push(Action::SetSlot(index as u8 + 1));
     }
-    let places: Vec<String> = shared.iter().map(|t| format!("Evolution {} / SkillTree {}", t.stage, t.slot)).collect();
-    ui.horizontal_wrapped(|ui| {
-        ui.label(RichText::new(icons::WARNING).color(color::WARNING));
-        ui.label(
-            RichText::new(format!(
-                "Tree #{} is also used by {} in this chain. Edit it in one place only — each tab is saved separately.",
-                tree.tree_id,
-                places.join(", ")
-            ))
-            .color(color::WARNING)
-            .small(),
-        );
+}
+
+fn action_bar(ui: &mut Ui, view: &mut ViewContext<'_>, tree: Option<&TreeState>) {
+    let state = view.state;
+    let selected = tree.and_then(|tree| state.selected_row.and_then(|uid| tree.row(uid)));
+    let editable = tree.is_some_and(TreeState::is_editable);
+    let has_row = selected.is_some();
+    let has_skill = selected.is_some_and(|row| row.entry.skill_id > 0);
+
+    // The right-hand side only reads, so it is prepared before the buttons borrow the action list.
+    let summary = tree.filter(|tree| tree.tree_id > 0).map(|tree| {
+        let dirty = tree.rows.iter().filter(|row| row.is_dirty()).count();
+        if dirty > 0 {
+            format!("{} rows · {dirty} changed", tree.rows.len())
+        } else {
+            format!("{} rows", tree.rows.len())
+        }
     });
+    let shared = tree.map(|tree| state.session.trees_sharing_id(tree.tree)).unwrap_or_default();
+    let shared_note = (!shared.is_empty()).then(|| {
+        let places: Vec<String> =
+            shared.iter().map(|t| format!("Evolution {} / SkillTree {}", t.stage, t.slot)).collect();
+        format!(
+            "This tree is also used by {} in this chain. Edit it in one place only: each tab is saved separately.",
+            places.join(", ")
+        )
+    });
+
+    let actions = &mut *view.actions;
+    widgets::control_row(
+        ui,
+        |ui| {
+            let Some(tree) = tree else {
+                ui.label(widgets::muted("No tree selected."));
+                return;
+            };
+            if widgets::button_enabled(ui, editable, icons::ADD, "Add Row")
+                .on_hover_text("Append an empty row (Insert)")
+                .clicked()
+            {
+                actions.push(Action::AddRow(tree.tree));
+            }
+            if widgets::button_enabled(ui, editable, icons::ADD_SKILL, "Add Skill…")
+                .on_hover_text("Search for a skill by name and append it")
+                .clicked()
+            {
+                actions.push(Action::OpenSkillPicker(PickerPurpose::AddRow(tree.tree)));
+            }
+            ui.add(egui::Separator::default().vertical().spacing(space::SM));
+            if widgets::button_enabled(ui, has_row, icons::DUPLICATE, "Duplicate").clicked()
+                && let Some(row) = selected
+            {
+                actions.push(Action::DuplicateRow(tree.tree, row.uid));
+            }
+            if widgets::button_enabled(ui, has_row, icons::DELETE, "Delete")
+                .on_hover_text("Delete the selected row (Del)")
+                .clicked()
+                && let Some(row) = selected
+            {
+                actions.push(Action::AskDeleteRow(tree.tree, row.uid));
+            }
+            if widgets::button_enabled(ui, has_skill, icons::EDIT, "Edit Skill").clicked()
+                && let Some(row) = selected
+            {
+                actions.push(Action::EditSkill(row.entry.skill_id));
+            }
+        },
+        |ui| {
+            if let Some(summary) = &summary {
+                ui.label(widgets::caption(summary.as_str()));
+            }
+            if let Some(note) = &shared_note {
+                ui.label(
+                    RichText::new(icon_text(icons::WARNING, "Shared in chain"))
+                        .size(theme::CAPTION_SIZE)
+                        .color(color::WARNING),
+                )
+                .on_hover_text(note.as_str());
+            }
+        },
+    );
 }
 
 fn grid(ui: &mut Ui, view: &mut ViewContext<'_>, tree: &TreeState) {
-    let text_height = ui.text_style_height(&egui::TextStyle::Body);
     let available_height = ui.available_height() - SCROLL_BAR_ALLOWANCE;
 
     egui::ScrollArea::horizontal().id_salt(("tree-scroll", tree.tree)).auto_shrink(false).show(ui, |ui| {
-        ui.spacing_mut().item_spacing.x = 4.0;
+        ui.spacing_mut().item_spacing = egui::Vec2::splat(space::XS);
+        // A light tint, so hovering never hides the colour of a changed row.
+        ui.visuals_mut().widgets.hovered.bg_fill = Color32::from_white_alpha(8);
+
         let mut table = TableBuilder::new(ui)
             .id_salt(("tree-grid", tree.tree))
             .sense(Sense::click())
@@ -195,26 +184,36 @@ fn grid(ui: &mut Ui, view: &mut ViewContext<'_>, tree: &TreeState) {
             .auto_shrink(false)
             .min_scrolled_height(0.0)
             .max_scroll_height(available_height)
-            .column(Column::exact(theme::ICON_SIZE + 4.0))
+            .column(Column::exact(ICON_COLUMN_WIDTH))
             .column(Column::exact(column_width(EntryField::SkillId)))
-            .column(Column::remainder().at_least(150.0).clip(true));
+            .column(Column::remainder().at_least(SKILL_COLUMN_MIN_WIDTH).clip(true));
         for field in EntryField::ALL.into_iter().skip(1) {
             table = table.column(Column::exact(column_width(field)));
         }
 
         table
-            .header(text_height + 10.0, |mut header| {
+            .header(theme::HEADER_HEIGHT, |mut header| {
                 header.col(|_| {});
-                header.col(|ui| header_cell(ui, EntryField::SkillId.header(), EntryField::SkillId.description()));
-                header.col(|ui| header_cell(ui, "Skill", "Skill name; double-click to edit the skill"));
+                header.col(|ui| {
+                    header_cell(
+                        ui,
+                        EntryField::SkillId.header(),
+                        EntryField::SkillId.description(),
+                        ColumnAlign::Center,
+                    );
+                });
+                header.col(|ui| {
+                    header_cell(ui, "Skill", "Skill name; double-click to edit the skill", ColumnAlign::Left)
+                });
                 for field in EntryField::ALL.into_iter().skip(1) {
-                    header.col(|ui| header_cell(ui, field.header(), field.description()));
+                    header.col(|ui| header_cell(ui, field.header(), field.description(), ColumnAlign::Center));
                 }
             })
-            .body(|body| {
+            .body(|mut body| {
+                let band = RowBand { x: body.max_rect().x_range(), clip: body.ui_mut().clip_rect() };
                 body.rows(theme::ROW_HEIGHT, tree.rows.len(), |mut table_row| {
                     let row = &tree.rows[table_row.index()];
-                    grid_row(&mut table_row, view, tree, row);
+                    grid_row(&mut table_row, view, tree, row, band);
                 });
             });
     });
@@ -225,6 +224,7 @@ fn grid_row(
     view: &mut ViewContext<'_>,
     tree: &TreeState,
     row: &EntryRow,
+    band: RowBand,
 ) {
     let state = view.state;
     let session = &state.session;
@@ -241,11 +241,13 @@ fn grid_row(
         }
     };
 
-    // Icon
+    // Icon. The first cell also paints the background of the whole row.
     table_row.col(|ui| {
         if let Some(fill) = dirty_fill {
-            paint_row_background(ui, fill);
+            band.paint(ui, fill);
         }
+        // Centres the icon in its column.
+        ui.add_space(space::XS);
         let icon = view.textures.icon(display.and_then(|d| d.icon_file_name.as_deref()));
         let response = widgets::game_icon(ui, icon, theme::ICON_SIZE);
         if skill_id > 0 {
@@ -254,18 +256,10 @@ fn grid_row(
     });
 
     // Skill ID
-    table_row.col(|ui| {
-        if let Some(fill) = dirty_fill {
-            paint_row_background(ui, fill);
-        }
-        number_cell(ui, view.actions, tree, row, EntryField::SkillId, selected, &menu, &select);
-    });
+    table_row.col(|ui| number_cell(ui, view.actions, tree, row, EntryField::SkillId, selected, &menu, &select));
 
     // Skill name and random group badge
     let (_, name_response) = table_row.col(|ui| {
-        if let Some(fill) = dirty_fill {
-            paint_row_background(ui, fill);
-        }
         let (name, tint) = if skill_id <= 0 {
             ("New skill".to_owned(), color::TEXT_FAINT)
         } else if display.is_none() {
@@ -273,28 +267,27 @@ fn grid_row(
         } else {
             (session.skill_name(skill_id), color::TEXT)
         };
-        let label = ui.add(egui::Label::new(RichText::new(name).color(tint)).truncate().selectable(false));
-        if skill_id > 0 {
-            label.on_hover_ui(|ui| game_tooltip::skill(ui, skill_id, display));
-        }
-
-        let group_id = row.entry.skill_group_id;
-        if group_id > 0 {
-            widgets::badge(ui, &format!("RND[{group_id}]"), color::ACCENT_BRIGHT, color::PANEL_ALT)
-                .on_hover_ui(|ui| game_tooltip::random_group(ui, session, group_id));
-        }
+        // The badge takes its place at the right edge first; the name truncates in what is left.
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            let group_id = row.entry.skill_group_id;
+            if group_id > 0 {
+                widgets::badge(ui, &format!("RND[{group_id}]"), color::ACCENT_BRIGHT)
+                    .on_hover_ui(|ui| game_tooltip::random_group(ui, session, group_id));
+            }
+            ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                let label = ui.add(egui::Label::new(RichText::new(name).color(tint)).truncate().selectable(false));
+                if skill_id > 0 {
+                    label.on_hover_ui(|ui| game_tooltip::skill(ui, skill_id, display));
+                }
+            });
+        });
     });
     if name_response.double_clicked() && skill_id > 0 {
         view.actions.push(Action::EditSkill(skill_id));
     }
 
     for field in EntryField::ALL.into_iter().skip(1) {
-        table_row.col(|ui| {
-            if let Some(fill) = dirty_fill {
-                paint_row_background(ui, fill);
-            }
-            number_cell(ui, view.actions, tree, row, field, selected, &menu, &select);
-        });
+        table_row.col(|ui| number_cell(ui, view.actions, tree, row, field, selected, &menu, &select));
     }
 
     let response = table_row.response();
@@ -327,7 +320,7 @@ fn number_cell(
 }
 
 fn row_menu(ui: &mut Ui, actions: &mut Vec<Action>, tree: &TreeState, row: &EntryRow) {
-    ui.set_min_width(210.0);
+    ui.set_min_width(216.0);
     let has_skill = row.entry.skill_id > 0;
     let has_group = row.entry.skill_group_id > 0;
     let mut item = |ui: &mut Ui, enabled: bool, icon: &str, text: &str, action: Action| {
@@ -457,5 +450,15 @@ mod tests {
         assert!(
             harness.state().actions.iter().any(|a| matches!(a, Action::AddRow(tree) if *tree == TreeRef::new(3, 1)))
         );
+    }
+
+    #[test]
+    fn tree_tabs_switch_the_slot() {
+        let mut harness = harness();
+        harness.run();
+        harness.get_by_label("SkillTree 4").click();
+        harness.run();
+
+        assert!(harness.state().actions.iter().any(|a| matches!(a, Action::SetSlot(4))));
     }
 }

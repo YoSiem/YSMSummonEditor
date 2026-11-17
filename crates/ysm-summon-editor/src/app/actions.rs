@@ -103,6 +103,10 @@ impl EditorApp {
                     self.set_status("Loading stat scaling…");
                 }
             }
+            Action::Reconnect => {
+                self.set_status("Reconnecting…");
+                self.connect();
+            }
             Action::OpenSettings => {
                 let dialog = SettingsDialog::new(&self.state.settings, self.state.demo);
                 self.push_dialog(Dialog::Settings(Box::new(dialog)));

@@ -1,8 +1,12 @@
-//! Common chrome for modal dialogs.
+//! Common chrome for modal dialogs: padding, title and footer.
+//!
+//! Every dialog has 24 px of padding, an 18 px title, and a footer separated
+//! by a hairline with the buttons right-aligned, the affirmative one first.
 
-use eframe::egui::{self, Color32, RichText, Ui};
+use eframe::egui::{self, Color32, Margin, RichText, Stroke, Ui, Vec2};
 
-use crate::theme::{self, color};
+use crate::theme::{self, color, space};
+use crate::widgets;
 
 pub struct ModalOutcome {
     /// The user pressed Escape or clicked outside the dialog.
@@ -21,41 +25,44 @@ pub fn show(
 ) -> ModalOutcome {
     let frame = egui::Frame::popup(&ctx.global_style())
         .fill(color::PANEL_BG)
-        .corner_radius(10)
-        .inner_margin(egui::Margin::symmetric(18, 14));
+        .stroke(Stroke::new(1.0, color::CONTROL_BORDER))
+        .corner_radius(theme::CARD_RADIUS)
+        .inner_margin(Margin::same(space::XL as i8));
+
     let response = egui::Modal::new(id).frame(frame).show(ctx, |ui| {
-        ui.set_width(width.min(ui.ctx().content_rect().width() - 100.0));
+        ui.set_width(width.min(ui.ctx().content_rect().width() - 96.0));
+        ui.spacing_mut().item_spacing = Vec2::splat(space::SM);
+
         ui.horizontal(|ui| {
-            ui.label(RichText::new(icon).size(22.0).color(icon_color));
-            ui.label(RichText::new(title).font(theme::bold(18.0)));
+            ui.set_height(24.0);
+            ui.label(RichText::new(icon).size(theme::TITLE_SIZE).color(icon_color));
+            ui.label(RichText::new(title).font(theme::bold(theme::TITLE_SIZE)));
         });
-        ui.add_space(2.0);
-        ui.separator();
-        ui.add_space(4.0);
+        ui.add_space(space::SM);
         add_contents(ui);
     });
     ModalOutcome { dismissed: response.should_close() }
 }
 
-/// A right-aligned row of dialog buttons, separated from the content above.
+/// The button row of a dialog. Buttons are added right to left, so add
+/// Cancel first and the affirmative button after it.
 pub fn footer<R>(ui: &mut Ui, add_buttons: impl FnOnce(&mut Ui) -> R) -> R {
-    ui.add_space(6.0);
-    ui.separator();
-    ui.add_space(2.0);
+    ui.add_space(space::SM);
+    widgets::divider(ui);
+    ui.add_space(space::SM);
     // A bounded row: an unbounded right-to-left layout would claim all remaining height.
-    let size = egui::Vec2::new(ui.available_width(), 32.0);
+    let size = Vec2::new(ui.available_width(), theme::CONTROL_HEIGHT);
     ui.allocate_ui_with_layout(size, egui::Layout::right_to_left(egui::Align::Center), add_buttons).inner
 }
 
 /// A one-line status or validation message inside a dialog.
 pub fn note(ui: &mut Ui, icon: &str, text: &str, tint: Color32) {
     ui.horizontal_wrapped(|ui| {
-        ui.label(RichText::new(icon).color(tint));
-        ui.label(RichText::new(text).color(tint));
+        ui.label(RichText::new(format!("{icon}  {text}")).size(theme::CAPTION_SIZE).color(tint));
     });
 }
 
-/// Section caption inside a dialog.
-pub fn caption(ui: &mut Ui, text: &str) {
-    ui.label(RichText::new(text).font(theme::bold(13.5)).color(color::TEXT_MUTED));
+/// Whether Enter was pressed this frame, to trigger a dialog's default action.
+pub fn enter_pressed(ui: &Ui) -> bool {
+    ui.input(|input| input.key_pressed(egui::Key::Enter))
 }

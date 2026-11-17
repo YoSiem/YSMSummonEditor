@@ -22,7 +22,7 @@ use crate::action::Action;
 use crate::dialogs::{Dialog, DialogContext};
 use crate::state::{AppState, ConnectionStatus};
 use crate::textures::TextureStore;
-use crate::theme::{self, color};
+use crate::theme::{self, color, space};
 use crate::views::{self, ViewContext};
 use crate::widgets::toast::{ToastKind, Toasts};
 use crate::worker::{Command, WorkerHandle};
@@ -50,6 +50,7 @@ pub struct EditorApp {
     save_countdown: Option<u8>,
     exit_prompt_open: bool,
     exit_confirmed: bool,
+    worker_failure_reported: bool,
     /// Scripted UI playback, see `devtools`.
     #[cfg(debug_assertions)]
     dev_script: Option<devtools::DevScript>,
@@ -106,6 +107,7 @@ impl EditorApp {
             save_countdown: None,
             exit_prompt_open: false,
             exit_confirmed: false,
+            worker_failure_reported: false,
             #[cfg(debug_assertions)]
             dev_script: devtools::DevScript::from_env(),
         };
@@ -316,6 +318,16 @@ impl eframe::App for EditorApp {
         let ctx = ui.ctx().clone();
 
         self.textures.poll();
+        if !self.worker.is_alive() && !std::mem::replace(&mut self.worker_failure_reported, true) {
+            // Nothing will ever answer, so stop waiting for it.
+            self.busy = None;
+            self.state.summons_loading = false;
+            self.state.chain_loading = false;
+            self.toasts.push(
+                ToastKind::Error,
+                "The background worker stopped, so the database can no longer be reached. Restart the application.",
+            );
+        }
         while let Some(event) = self.worker.try_recv() {
             for dialog in &mut self.dialogs {
                 dialog.on_event(&event);
@@ -340,11 +352,13 @@ impl eframe::App for EditorApp {
         views::summon_list::show(ui, &mut self.state, &mut self.textures, &mut actions);
         {
             let mut view = ViewContext { state: &self.state, textures: &mut self.textures, actions: &mut actions };
+            // Every card is separated from its neighbours and the window edge by the same gap.
+            let gap = space::SM as i8;
             let frame = egui::Frame::new().fill(color::WINDOW_BG).inner_margin(Margin {
-                left: 4,
-                right: 12,
-                top: 0,
-                bottom: 8,
+                left: gap,
+                right: gap,
+                top: 2,
+                bottom: gap,
             });
             egui::CentralPanel::default().frame(frame).show(ui, |ui| {
                 egui::Panel::top("summon-header")
@@ -352,8 +366,10 @@ impl eframe::App for EditorApp {
                     .resizable(false)
                     .show_separator_line(false)
                     .show(ui, |ui| {
+                        ui.spacing_mut().item_spacing.y = space::SM;
                         views::summon_header::show(ui, &mut view);
-                        ui.add_space(6.0);
+                        views::stage_tabs::show(ui, &mut view);
+                        ui.add_space(0.0);
                     });
                 views::effective_panel::show(ui, &mut view);
                 egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| {

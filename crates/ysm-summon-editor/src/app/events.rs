@@ -13,14 +13,17 @@ use crate::worker::Event;
 
 impl EditorApp {
     pub(super) fn handle_event(&mut self, event: Event) {
+        if event.is_repository_answer() {
+            self.state.note_request_outcome(event.failure());
+        }
+
         match event {
             Event::Connected(Ok(server)) => {
-                self.state.connection =
-                    if self.state.demo { ConnectionStatus::Demo } else { ConnectionStatus::Connected(server) };
+                self.state.connected(server);
                 self.search_summons();
             }
             Event::Connected(Err(error)) => {
-                self.state.connection = ConnectionStatus::Failed(error.clone());
+                self.state.connection = ConnectionStatus::Failed(error.message.clone());
                 self.state.summons.clear();
                 self.set_status("Database connection failed (see details).");
                 self.push_dialog(Dialog::message(MessageDialog::error(

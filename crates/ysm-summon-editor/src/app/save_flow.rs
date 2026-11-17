@@ -20,7 +20,7 @@ use crate::dialogs::save_review::SaveReviewDialog;
 use crate::dialogs::{Dialog, MessageDialog};
 use crate::icons;
 use crate::widgets::toast::ToastKind;
-use crate::worker::{Command, Outcome};
+use crate::worker::{Command, FailureKind, Outcome};
 
 /// What triggered the save, which decides what happens once it is done.
 pub(super) enum SaveOrigin {
@@ -89,7 +89,7 @@ impl EditorApp {
                 );
                 self.ask_or_review(origin, planner);
             }
-            Err(error) => self.save_failed("Could not check where the edited data is used.", error),
+            Err(error) => self.save_failed("Could not check where the edited data is used.", error.message),
         }
     }
 
@@ -232,7 +232,7 @@ impl EditorApp {
                 }
                 self.set_status(summary);
             }
-            Err(error) => self.save_failed("Could not save the staged changes. Nothing was written.", error),
+            Err(error) => self.save_failed(commit_failure_text(error.kind), error.message),
         }
     }
 
@@ -240,6 +240,21 @@ impl EditorApp {
         self.save = SaveFlow::Idle;
         self.set_status("Save failed (see details).");
         self.push_dialog(Dialog::message(MessageDialog::error("Save failed", text, details)));
+    }
+}
+
+/// What to tell the user after a failed commit. Only a rejection by the
+/// server guarantees that the transaction was rolled back.
+fn commit_failure_text(kind: FailureKind) -> &'static str {
+    match kind {
+        FailureKind::Request | FailureKind::NotConnected => {
+            "Could not save the staged changes. The transaction was rolled back and nothing was written."
+        }
+        FailureKind::Connection | FailureKind::Timeout | FailureKind::Internal => {
+            "The save was interrupted before the database confirmed it. The transaction is normally rolled back, \
+             but this could not be verified. Reload the summon (F5) to see what the database contains before \
+             saving again. Your staged changes are still here."
+        }
     }
 }
 
@@ -310,4 +325,19 @@ fn question_dialog(question: &SaveQuestion) -> MessageDialog {
     dialog
         .button(icons::CLOSE, "Cancel save", ButtonStyle::Plain, Some(Action::SaveCancelled))
         .on_dismiss(Action::SaveCancelled)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_a_server_rejection_promises_that_nothing_was_written() {
+        assert!(commit_failure_text(FailureKind::Request).contains("nothing was written"));
+        for uncertain in [FailureKind::Connection, FailureKind::Timeout, FailureKind::Internal] {
+            let text = commit_failure_text(uncertain);
+            assert!(!text.contains("nothing was written"), "{text}");
+            assert!(text.contains("could not be verified"), "{text}");
+        }
+    }
 }

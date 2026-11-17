@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use eframe::egui::{self, Align2, Color32, CornerRadius, Margin, RichText, Stroke, Vec2};
 
 use crate::icons;
-use crate::theme::color;
+use crate::theme::{self, color};
 
 const MAX_VISIBLE: usize = 5;
 
@@ -84,13 +84,13 @@ impl Toasts {
                         let frame = egui::Frame::new()
                             .fill(color::PANEL_ALT)
                             .stroke(Stroke::new(1.0, tint.gamma_multiply(0.7)))
-                            .corner_radius(CornerRadius::same(8))
+                            .corner_radius(CornerRadius::same(theme::CARD_RADIUS))
                             .inner_margin(Margin::symmetric(12, 8));
                         let response = frame
                             .show(ui, |ui| {
                                 ui.set_max_width(420.0);
                                 ui.horizontal(|ui| {
-                                    ui.label(RichText::new(toast.kind.icon()).size(18.0).color(tint));
+                                    ui.label(RichText::new(toast.kind.icon()).size(theme::GLYPH_SIZE).color(tint));
                                     ui.add(egui::Label::new(toast.text.as_str()).wrap());
                                 });
                             })
