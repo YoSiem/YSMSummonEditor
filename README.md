@@ -10,6 +10,7 @@
 ![Platform](https://img.shields.io/badge/platform-Windows%20x64-5c728a)
 ![Built with](https://img.shields.io/badge/built%20with-Rust%20%2B%20egui-b7410e)
 ![Database](https://img.shields.io/badge/database-MSSQL-6b849f)
+[![License](https://img.shields.io/badge/license-MIT-4a5f78)](LICENSE)
 
 [Download](https://github.com/YoSiem/YSMSummonEditor/releases) · [Quick start](#quick-start) · [Features](#features) · [Build from source](#build-from-source)
 
@@ -34,6 +35,7 @@ YSM Summon Editor is a single executable with nothing to install. Every edit is 
 - [Architecture](#architecture)
 - [Development](#development)
 - [Coming from the .NET editor](#coming-from-the-net-editor)
+- [License](#license)
 
 ## Features
 
@@ -221,6 +223,10 @@ What behaves differently:
 - **Orphaned placeholder groups are not saved.** An empty random group created by typing a group ID is dropped once no row points at it.
 
 The WPF source remains available in the git history before `v0.1.0-alpha`.
+
+## License
+
+Released under the [MIT License](LICENSE).
 
 ---
 
