@@ -1,0 +1,20 @@
+[package]
+name = "ysm-data"
+description = "Data access for the YSM Summon Editor: MSSQL and in-memory repositories, settings, asset index."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[dependencies]
+ysm-core.workspace = true
+rust_decimal.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tiberius = { version = "0.13", default-features = false, features = ["tds73", "native-tls", "rust_decimal"] }
+tokio = { version = "1", features = ["rt", "net", "time"] }
+tokio-util = { version = "0.7", features = ["compat"] }
+
+[lints]
+workspace = true

@@ -1,0 +1,14 @@
+[package]
+name = "ysm-core"
+description = "Pure domain logic of the YSM Summon Editor: models, edit session, save planning, SQL script."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[dependencies]
+rust_decimal.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

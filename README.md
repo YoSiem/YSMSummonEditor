@@ -1,174 +1,229 @@
-# YSMSummonEditor
+<div align="center">
 
-`YSMSummonEditor` is a Windows desktop editor for Rappelz summon data, built with WPF and backed by MSSQL. It is intended for structured content editing with staged changes, review before save, and a workflow tailored for summon, skill tree, random skill group, and stat-scaling work.
+<img src="assets/Heaven_logo1.png" alt="YSM Summon Editor" height="96">
 
-## Overview
+# YSM Summon Editor
 
-The application combines summon browsing, multi-evolution editing, skill and skill tree management, stat scaling tools, image lookup, and controlled save/export flow in a single dark-themed editor. It is built on top of `YSMLib` and currently targets MSSQL only.
+**A fast, native editor for Rappelz summon data: skill trees, skills, random skill groups and stat scaling.**
 
-## Core Capabilities
+[![Release](https://img.shields.io/github/v/release/YoSiem/YSMSummonEditor?include_prereleases&label=release&color=3d7ab8)](https://github.com/YoSiem/YSMSummonEditor/releases)
+![Platform](https://img.shields.io/badge/platform-Windows%20x64-5c728a)
+![Built with](https://img.shields.io/badge/built%20with-Rust%20%2B%20egui-b7410e)
+![Database](https://img.shields.io/badge/database-MSSQL-6b849f)
 
-### Summon browsing and evolution chain
+[Download](https://github.com/YoSiem/YSMSummonEditor/releases) · [Quick start](#quick-start) · [Features](#features) · [Build from source](#build-from-source)
 
-- Search by summon ID, summon name, or related text using `Go` or `Enter`
-- Browse summons with 36x36 icons
-- Load the full three-step evolution chain automatically for the selected final summon
-- Display summon header icon, feature text, card metadata, and a visual `Evolution 1 -> Evolution 2 -> Evolution 3` chain
+</div>
 
-### Skill tree editing
+![Main window](docs/screenshots/main.png)
 
-- Inline editing of `SkillTreeResource` rows
-- Right-click actions for:
-  - editing a skill
-  - deleting a row
-  - creating a random skill group
-  - editing a random skill group
-  - detaching a random skill group
-- Dirty row highlighting for staged changes
-- Effective skills view synchronized with the currently active evolution stage
+YSM Summon Editor is a single executable with nothing to install. Every edit is staged first, reviewed before it is saved, and then either written to MSSQL in one transaction or exported as an executable `.sql` script.
 
-### Skill editing
+> [!WARNING]
+> **0.1.0-alpha.** This release is a full rewrite of the original WPF/.NET editor in Rust. The SQL was carried over statement for statement, but the database layer has not yet been validated against a live server. Back up your database, and use **Save to `.sql`** to inspect what would be written before saving to the database directly.
 
-- Dedicated skill editor for `SkillResource`
-- Business-field editing and advanced raw-field editing
-- Staged updates integrated into the global save and review flow
+## Contents
 
-### Random skill groups
+- [Features](#features)
+- [Screenshots](#screenshots)
+- [Quick start](#quick-start)
+- [Configuration](#configuration)
+- [Saving changes](#saving-changes)
+- [Keyboard shortcuts](#keyboard-shortcuts)
+- [Build from source](#build-from-source)
+- [Architecture](#architecture)
+- [Development](#development)
+- [Coming from the .NET editor](#coming-from-the-net-editor)
 
-- Full support for `SummonRandomSkillResource`
-- Recognition of `skill_group_id` in tree rows with `RND[GroupId]` badge display
-- Random group editor with:
-  - skill search by exact ID and name contains
-  - 36x36 skill icons
-  - tooltip support
-  - maximum 15 entries
-  - duplicate prevention
-  - automatic sorting by `SkillId`
-  - automatic `use_code = selected.Count`
-- Automatic group ID allocation based on both:
-  - `SummonRandomSkillResource.sid`
-  - `SkillTreeResource.skill_group_id`
-- Manual positive `Grp` entry can create an empty placeholder group automatically
-- Shared group usage warnings with clone-or-edit-in-place decision during save
+## Features
 
-### Stat scaling editor
+**Browse**
 
-- Modal stats window for the selected final summon
-- Editable data sources:
-  - `StatResource`
-  - `CreatureLevelBonus`
-- Live calculator using:
-  - level range `1..350`
-  - enhance stage range `0..5`
-  - `CreatureEnhance.stat_amplify`
-- Displays raw and enhanced final values
+- Live search by summon ID, name or card name, with filters for final evolutions and riding-only summons.
+- The full three-stage evolution chain loads automatically from whichever stage you pick.
+- Summon faces, skill icons and illustrations are read from your client dump folder (`png`, `jpg`, `bmp`, `webp`, `tga`, `dds`).
 
-### Save, review, and export
+**Edit skill trees**
 
-- All edits are staged first
-- Save always goes through review
-- Save target toggle:
-  - `DB` for direct MSSQL write
-  - `.sql` for diff export without touching the database
-- Global pre-save confirmation before database commit
-- Shared usage warnings for skills, skill trees, stats, growth bonuses, and random groups
-- Unsaved-change protection when switching to another summon:
-  - `Save`
-  - `Discard`
-  - `Cancel`
+- All five tree slots of every evolution in one grid, edited in place with Tab and Enter.
+- Add skills by name through a search picker instead of typing raw IDs.
+- Duplicate and delete rows, with full **undo and redo**.
+- An *Effective Skills* view merges the trees of an evolution by skill and level, and edits made there apply to every merged row.
+- Rich in-game tooltips, rendered with the game's own colours and formatting.
 
-### Assets and UI
+**Edit skills, random groups and stats**
 
-- Default dump folder auto-falls back to `%USERPROFILE%\Desktop\Dump` when empty
-- Recursive asset indexing for summon and skill images
-- Embedded branding assets and default 36x36 fallback icon
-- Dark grayscale UI with custom scrollbars and game-oriented tooltip rendering
+- A skill editor for every `SkillResource` column, with typed validation and a curated list of the fields you change most.
+- A random skill group editor with search, a 15-skill limit, automatic sorting and `use_code`.
+- A stat scaling editor for base stats and per-stage growth bonuses, with a live calculator for any level and enhance stage and a growth chart.
 
-## Requirements
+**Save safely**
 
-- Windows
-- .NET 10 Desktop Runtime
-- MSSQL access to the target Rappelz database
+- Nothing touches the database until you review the complete list of changes.
+- Data shared with other summons is detected before saving, and you choose between cloning it for the edited summon or editing it in place for everyone.
+- Save directly to MSSQL in a single transaction, or export an executable `.sql` script.
+- Unsaved changes are protected when you switch summons or close the window.
 
-## Installation
+## Screenshots
 
-### Release output
+| | |
+|---|---|
+| **Stat scaling**: base stats, growth bonuses, calculator and growth chart | **Skill editor**: typed columns with change tracking |
+| ![Stat scaling](docs/screenshots/stat-scaling.png) | ![Skill editor](docs/screenshots/skill-editor.png) |
+| **Random skill group**: search on the left, candidates on the right | **Skill picker**: add tree rows by name |
+| ![Random skill group](docs/screenshots/random-group.png) | ![Skill picker](docs/screenshots/skill-picker.png) |
+| **Shared data**: clone for this summon or edit in place | **Review**: every change before it is saved |
+| ![Shared data prompt](docs/screenshots/shared-data.png) | ![Save review](docs/screenshots/save-review.png) |
 
-Published builds are written to:
+The screenshots show the built-in demo data, which has no client images and therefore shows the placeholder icon everywhere.
 
-`C:\Users\<you>\Documents\YSMReleasedTools\YSMSummonEditor\`
+## Quick start
 
-The release output is intentionally kept minimal. The publish script removes non-runtime artifacts and keeps only the executable and config/json-style runtime files when they exist.
+1. Download `ysm-summon-editor.exe` from the [latest release](https://github.com/YoSiem/YSMSummonEditor/releases) and run it. No runtime is required.
+2. Open **Settings**, enter the MSSQL connection and press **Test connection**.
+3. Point **Client dump folder** at your extracted client files to get icons and illustrations.
+4. Pick a summon from the list and start editing.
 
-### Local database bootstrap
+Windows may show a SmartScreen prompt on first launch because the executable is not code-signed.
 
-Create a local `.env.local` file in the repository root. This file is ignored by git.
+### Try it without a database
 
-Example:
+```powershell
+ysm-summon-editor.exe --demo
+```
+
+Demo mode runs on built-in sample data held in memory. Every feature works, including saving, and nothing is written anywhere.
+
+## Configuration
+
+Settings are stored in `%LOCALAPPDATA%\YSMSummonEditor\settings.json` and are edited in **Settings**. The database password is kept there in plain text.
+
+| Setting | Notes |
+|---|---|
+| Server, port, database, user, password | SQL Server authentication over TCP. The port defaults to `1433`. |
+| Trust server certificate | Accepts the server certificate without validating it, which is the usual choice for a local server. |
+| Client dump folder | Scanned recursively for images. Defaults to `%USERPROFILE%\Desktop\Dump`, created on first run. |
+
+### Bootstrap from `.env.local`
+
+When no database is configured yet, the connection is read from a `.env.local` file in the working directory, the executable's directory or any parent of either:
 
 ```env
-YSM_DB_PROVIDER=MSSQL
-YSM_DB_CONNECTION_STRING=Server=127.0.0.1,1433;Database=YourDb;User Id=YourUser;Password=YourPass;TrustServerCertificate=True;
+YSM_DB_CONNECTION_STRING=Server=127.0.0.1,1433;Database=YourDb;User Id=YourUser;Password=YourPass;TrustServerCertificate=True;Encrypt=False
 ```
 
-Tracked template:
+[`.env.local.template`](.env.local.template) is a starting point. `.env.local` itself is ignored by git.
 
-`./.env.local.template`
+## Saving changes
 
-## First Run
+Edits are staged, and the **Save** button shows how many are pending. Saving always follows the same path:
 
-1. Start `YSMSummonEditor.exe`
-2. Open `Settings`
-3. Confirm the database connection
-4. Confirm the dump folder path
+1. **Shared data check.** If an edited skill tree, stat row or random group is also used by summons outside the chain you are editing, you choose **Clone** (the edited summon gets its own copy) or **Edit in place** (the change applies to everyone). Edited skills and growth bonuses that are used elsewhere are listed so you can back out.
+2. **Review.** Every insert, update and delete is listed with its before and after values, next to the equivalent SQL script.
+3. **Write.** Depending on the **Save to** switch in the toolbar:
+   - **DB** applies everything in a single transaction after one more confirmation, then reloads the summon from the database.
+   - **.sql** writes the script to a file and leaves the database untouched. Staged changes stay staged.
 
-If no dump path is stored yet, the application defaults to:
+The exported script runs as one transaction with `XACT_ABORT ON`, so an error rolls everything back.
 
-`%USERPROFILE%\Desktop\Dump`
+## Keyboard shortcuts
 
-That folder is created automatically if missing.
+| Keys | Action |
+|---|---|
+| <kbd>Ctrl</kbd>+<kbd>S</kbd> | Review and save staged changes |
+| <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd> | Undo / redo tree and random group edits |
+| <kbd>Ctrl</kbd>+<kbd>F</kbd> | Focus the summon search |
+| <kbd>F5</kbd> | Reload the current summon from the database |
+| <kbd>Insert</kbd> | Add a row to the current tree |
+| <kbd>Del</kbd> | Delete the selected row |
+| <kbd>Tab</kbd> / <kbd>Enter</kbd> | Commit the cell being edited |
+| <kbd>Esc</kbd> | Cancel the cell edit or close a dialog |
 
-## Build From Source
+Right-click a tree row for the full menu, including the random group actions.
+
+## Build from source
+
+Requires [Rust](https://rustup.rs) 1.88 or newer on Windows.
 
 ```powershell
-dotnet restore YSMSummonEditor.slnx
-dotnet build YSMSummonEditor.slnx -c Release
-dotnet test YSMSummonEditor.slnx -c Release
+git clone https://github.com/YoSiem/YSMSummonEditor.git
+cd YSMSummonEditor
+cargo build --release -p ysm-summon-editor
 ```
 
-## Publish
+The executable is written to `target\release\ysm-summon-editor.exe`.
+
+## Architecture
+
+The workspace has three crates with strict one-way dependencies:
+
+| Crate | Responsibility |
+|---|---|
+| [`ysm-core`](crates/ysm-core) | Pure domain logic with no IO: models, the edit session with undo/redo, save planning, review rows, SQL script generation, the stat scaling calculator and the tooltip markup parser. |
+| [`ysm-data`](crates/ysm-data) | The `SummonRepository` trait with an MSSQL implementation ([tiberius](https://github.com/prisma/tiberius)) and an in-memory one, plus settings, `.env.local` loading and the asset index. |
+| [`ysm-summon-editor`](crates/ysm-summon-editor) | The [egui](https://github.com/emilk/egui) application: views, dialogs and the background worker. |
+
+The UI thread never queries the database or decodes an image. Views push actions, the application reduces them, and a worker thread owns the connection:
+
+```mermaid
+flowchart LR
+    Views["Views and dialogs"] -- Action --> App["EditorApp"]
+    App -- "reads and mutates" --> Session["EditSession (ysm-core)"]
+    App -- Command --> Worker["Worker thread"]
+    Worker -- Event --> App
+    Worker --> Repo["SummonRepository"]
+    Repo --> Mssql[("MSSQL")]
+    Repo --> Memory[("Demo data")]
+```
+
+Where to start when extending the editor:
+
+- **A new query or write:** add a method to `SummonRepository` in [`repository.rs`](crates/ysm-data/src/repository.rs), then implement it in [`mssql/`](crates/ysm-data/src/mssql) and [`memory.rs`](crates/ysm-data/src/memory.rs).
+- **A new kind of staged change:** extend `EditSession` in [`session/`](crates/ysm-core/src/session), then `CommitRequest`, `sql_script.rs` and `review.rs`.
+- **A new screen:** add a dialog under [`dialogs/`](crates/ysm-summon-editor/src/dialogs), an `Action` that opens it, and its handling in [`app/actions.rs`](crates/ysm-summon-editor/src/app/actions.rs).
+
+Tables read and written: `SummonResource`, `SkillTreeResource`, `SkillResource`, `SummonRandomSkillResource`, `StatResource`, `CreatureLevelBonus`, `CreatureEnhance`, `StringResource`, `ItemResource`.
+
+## Development
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\publish-release.ps1
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --all
 ```
 
-Publish target:
+The MSSQL layer has a smoke test that only runs on request, against a database you point it at:
 
-`C:\Users\<you>\Documents\YSMReleasedTools\YSMSummonEditor\`
+```powershell
+$env:YSM_MSSQL_TEST_CONNECTION = "Server=...;Database=...;User Id=...;Password=...;TrustServerCertificate=True"
+cargo test -p ysm-data -- --ignored
+```
 
-## Runtime Files
+Debug builds can play back a UI script and save screenshots, which is how the images in this README were made:
 
-- User settings: `%LocalAppData%\YSMSummonEditor\settings.json`
-- Local DB bootstrap: `./.env.local`
+```powershell
+$env:YSM_DEV_SCRIPT = "select 1013; stats; wait 20; shot stats.png; quit"
+cargo run -p ysm-summon-editor -- --demo
+```
 
-## Main Data Sources
+The available steps are listed in [`devtools.rs`](crates/ysm-summon-editor/src/app/devtools.rs).
 
-- `SummonResource`
-- `SkillTreeResource`
-- `SkillResource`
-- `SummonRandomSkillResource`
-- `StatResource`
-- `CreatureLevelBonus`
-- `CreatureEnhance`
-- `StringResource`
-- `ItemResource`
+## Coming from the .NET editor
 
-## Tech Stack
+Versions up to and including the last WPF build required the .NET 10 Desktop Runtime. This version replaces it entirely and reads the same `settings.json` and `.env.local`, so an existing setup keeps working without changes.
 
-- `WPF`
-- `.NET 10`
-- `WPF-UI`
-- `ModernWpf`
-- `CommunityToolkit.Mvvm`
-- `Microsoft.Extensions.Hosting`
-- `YSMLib`
+What behaves differently:
+
+- **`.sql` export is executable.** The original wrote upserts and clone steps as comments. The script now contains real statements and allocates the IDs of cloned rows itself.
+- **Reopening an editor keeps staged edits.** The skill and stat editors start from the staged values and measure changes against the database, so applying twice never drops an edit.
+- **Tree changes follow row identity.** Inserting a row in the middle of a tree is reviewed as one insert, not as a cascade of updates.
+- **Reloading after a clone is correct.** After a shared tree or stat row is cloned on save, the summon is read again, so the editor shows the new IDs.
+- **Orphaned placeholder groups are not saved.** An empty random group created by typing a group ID is dropped once no row points at it.
+
+The WPF source remains available in the git history before `v0.1.0-alpha`.
+
+---
+
+<div align="center">
+made by YoSiem
+</div>

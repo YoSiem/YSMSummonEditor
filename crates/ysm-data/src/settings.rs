@@ -1,0 +1,223 @@
+//! User settings, stored as JSON in the same file and shape the original
+//! .NET editor used, so an existing configuration keeps working.
+
+use std::io;
+use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Serialize};
+
+use crate::Result;
+
+const APP_FOLDER: &str = "YSMSummonEditor";
+const SETTINGS_FILE: &str = "settings.json";
+pub const DEFAULT_PORT: i32 = 1433;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase", default)]
+pub struct DbSettings {
+    pub server: String,
+    pub port: i32,
+    pub database: String,
+    pub user_id: String,
+    pub password: String,
+    pub trust_server_certificate: bool,
+}
+
+impl Default for DbSettings {
+    fn default() -> Self {
+        Self {
+            server: String::new(),
+            port: DEFAULT_PORT,
+            database: String::new(),
+            user_id: String::new(),
+            password: String::new(),
+            trust_server_certificate: true,
+        }
+    }
+}
+
+impl DbSettings {
+    pub fn is_configured(&self) -> bool {
+        !self.server.trim().is_empty() && !self.database.trim().is_empty() && !self.user_id.trim().is_empty()
+    }
+
+    /// The configured port, or the default when it is out of range.
+    pub fn effective_port(&self) -> u16 {
+        u16::try_from(self.port).ok().filter(|p| *p > 0).unwrap_or(DEFAULT_PORT as u16)
+    }
+
+    /// `server,port / database`, without credentials.
+    pub fn display_target(&self) -> String {
+        format!("{},{} / {}", self.server, self.effective_port(), self.database)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase", default)]
+pub struct AppSettings {
+    pub database: DbSettings,
+    pub dump_folder_path: String,
+    pub include_riding_only_by_default: bool,
+    pub include_non_form1_by_default: bool,
+    pub show_all_evolutions_by_default: bool,
+    pub save_to_sql_mode: bool,
+}
+
+pub struct SettingsStore {
+    path: PathBuf,
+}
+
+impl SettingsStore {
+    pub fn new(path: impl Into<PathBuf>) -> Self {
+        Self { path: path.into() }
+    }
+
+    /// `%LOCALAPPDATA%\YSMSummonEditor\settings.json`.
+    pub fn at_default_location() -> Self {
+        let base = std::env::var_os("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local").join("share")))
+            .unwrap_or_else(std::env::temp_dir);
+        Self::new(base.join(APP_FOLDER).join(SETTINGS_FILE))
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// Reads the settings; a missing file yields the defaults.
+    pub fn load(&self) -> Result<AppSettings> {
+        let json = match std::fs::read_to_string(&self.path) {
+            Ok(json) => json,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(AppSettings::default()),
+            Err(error) => return Err(error.into()),
+        };
+        // A UTF-8 byte order mark is not valid JSON but .NET tools sometimes write one.
+        let mut settings: AppSettings = serde_json::from_str(json.trim_start_matches('\u{feff}'))
+            .map_err(|error| crate::DataError::Invalid(format!("settings file is not valid: {error}")))?;
+        if settings.database.port <= 0 {
+            settings.database.port = DEFAULT_PORT;
+        }
+        Ok(settings)
+    }
+
+    pub fn save(&self, settings: &AppSettings) -> Result<()> {
+        if let Some(parent) = self.path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let json = serde_json::to_string_pretty(settings)
+            .map_err(|error| crate::DataError::Invalid(format!("could not serialize settings: {error}")))?;
+        std::fs::write(&self.path, json)?;
+        Ok(())
+    }
+}
+
+/// `%USERPROFILE%\Desktop\Dump`.
+pub fn default_dump_folder() -> Option<PathBuf> {
+    let home = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME"))?;
+    Some(PathBuf::from(home).join("Desktop").join("Dump"))
+}
+
+/// Points the dump folder at the default location when none is set,
+/// creating the folder. Returns whether the setting was changed.
+pub fn ensure_default_dump_folder(settings: &mut AppSettings) -> io::Result<bool> {
+    if !settings.dump_folder_path.trim().is_empty() {
+        return Ok(false);
+    }
+    let Some(folder) = default_dump_folder() else {
+        return Ok(false);
+    };
+    std::fs::create_dir_all(&folder)?;
+    settings.dump_folder_path = folder.to_string_lossy().into_owned();
+    Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_file(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("ysm-settings-test-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        dir.join("nested").join("settings.json")
+    }
+
+    #[test]
+    fn reads_a_file_written_by_the_dotnet_editor() {
+        let json = r#"{
+  "Database": {
+    "Server": "10.0.0.5",
+    "Port": 14330,
+    "Database": "Arcadia",
+    "UserId": "sa",
+    "Password": "p;w=d",
+    "TrustServerCertificate": false
+  },
+  "DumpFolderPath": "C:\\Dump",
+  "IncludeRidingOnlyByDefault": false,
+  "IncludeNonForm1ByDefault": true,
+  "ShowAllEvolutionsByDefault": false,
+  "SaveToSqlMode": true
+}"#;
+        let path = temp_file("dotnet");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, format!("\u{feff}{json}")).unwrap();
+
+        let settings = SettingsStore::new(&path).load().unwrap();
+        assert_eq!(settings.database.server, "10.0.0.5");
+        assert_eq!(settings.database.effective_port(), 14330);
+        assert_eq!(settings.database.password, "p;w=d");
+        assert!(!settings.database.trust_server_certificate);
+        assert_eq!(settings.dump_folder_path, "C:\\Dump");
+        assert!(settings.include_non_form1_by_default);
+        assert!(settings.save_to_sql_mode);
+        assert!(settings.database.is_configured());
+    }
+
+    #[test]
+    fn missing_file_and_missing_keys_fall_back_to_defaults() {
+        let path = temp_file("missing");
+        let store = SettingsStore::new(&path);
+        assert_eq!(store.load().unwrap(), AppSettings::default());
+
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, r#"{ "Database": { "Server": "x", "Port": 0 } }"#).unwrap();
+        let settings = store.load().unwrap();
+        assert_eq!(settings.database.server, "x");
+        assert_eq!(settings.database.port, DEFAULT_PORT);
+        assert!(settings.database.trust_server_certificate);
+        assert!(!settings.database.is_configured());
+    }
+
+    #[test]
+    fn save_writes_pascal_case_keys_and_round_trips() {
+        let path = temp_file("roundtrip");
+        let store = SettingsStore::new(&path);
+        let mut settings =
+            AppSettings { dump_folder_path: "D:\\Assets".into(), save_to_sql_mode: true, ..Default::default() };
+        settings.database.user_id = "editor".into();
+
+        store.save(&settings).unwrap();
+        let json = std::fs::read_to_string(&path).unwrap();
+        for key in
+            ["\"Database\"", "\"UserId\"", "\"TrustServerCertificate\"", "\"DumpFolderPath\"", "\"SaveToSqlMode\""]
+        {
+            assert!(json.contains(key), "missing {key} in {json}");
+        }
+        assert_eq!(store.load().unwrap(), settings);
+    }
+
+    #[test]
+    fn invalid_json_is_an_error_not_a_silent_reset() {
+        let path = temp_file("invalid");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "{ not json").unwrap();
+        assert!(SettingsStore::new(&path).load().is_err());
+    }
+
+    #[test]
+    fn out_of_range_port_uses_the_default() {
+        let settings = DbSettings { port: 99_999, ..Default::default() };
+        assert_eq!(settings.effective_port(), 1433);
+    }
+}

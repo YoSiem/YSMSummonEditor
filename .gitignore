@@ -1,31 +1,10 @@
-# Build
-bin/
-obj/
-out/
-publish/
+# Build output
+/target/
+
+# Local database bootstrap (contains credentials)
+.env.local
 
 # IDE
 .vs/
+.vscode/
 .idea/
-*.suo
-*.user
-*.userosscache
-*.sln.docstates
-*.DotSettings.user
-_ReSharper*/
-*.ReSharper
-
-# Test
-TestResults/
-*.trx
-*.coverage
-coverage/
-
-# App data
-*.db
-*.log
-.env.local
-
-# OS
-Thumbs.db
-Desktop.ini
