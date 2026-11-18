@@ -26,7 +26,7 @@ use ysm_core::save_plan::UsageReport;
 use ysm_core::session::{ChainBundle, TreeRef};
 use ysm_core::value::SkillRecord;
 use ysm_data::repository::SKILL_SEARCH_LIMIT;
-use ysm_data::{AssetIndex, DataError, DbSettings, InMemoryRepository, MssqlRepository, SummonRepository, loader};
+use ysm_data::{AssetIndex, DataError, DbSettings, InMemoryRepository, SqlRepository, SummonRepository, loader};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FailureKind {
@@ -83,7 +83,7 @@ impl From<DataError> for Failure {
 pub type Outcome<T> = Result<T, Failure>;
 
 pub enum Command {
-    /// Switch to the MSSQL database described by the settings and verify it.
+    /// Switch to the database described by the settings and verify it.
     Connect(DbSettings),
     /// Switch to the built-in demo data.
     UseDemo,
@@ -109,6 +109,7 @@ pub enum Command {
     },
     LoadScaling {
         summon_id: i32,
+        earlier_ids: Vec<i32>,
     },
     SearchSkills {
         text: String,
@@ -188,11 +189,17 @@ pub enum Event {
     SkillDisplayLoaded(Outcome<Vec<SkillDisplay>>),
     RandomGroupsLoaded { requested: Vec<i32>, result: Outcome<Vec<RandomSkillGroup>> },
     SkillRecordLoaded { skill_id: i32, result: Outcome<SkillRecord> },
-    ScalingLoaded(Outcome<(StatScalingSnapshot, Vec<CreatureEnhance>)>),
+    ScalingLoaded(Outcome<ScalingData>),
     SkillsFound { generation: u64, result: Outcome<Vec<SkillDisplay>> },
     NextRandomGroupId { tree: TreeRef, uid: u64, result: Outcome<i32> },
     SaveAnalyzed(Outcome<UsageReport>),
     Committed(Outcome<CommitResult>),
+}
+
+pub struct ScalingData {
+    pub current: StatScalingSnapshot,
+    pub earlier: Vec<StatScalingSnapshot>,
+    pub enhance: Vec<CreatureEnhance>,
 }
 
 impl Event {
@@ -295,7 +302,7 @@ fn next_command(queue: &mut VecDeque<Command>) -> Option<Command> {
 enum Source {
     None,
     Demo,
-    Mssql(DbSettings),
+    Database(DbSettings),
 }
 
 struct Worker {
@@ -338,8 +345,8 @@ impl Worker {
     /// A panic may have left a database connection half-way through a
     /// conversation, so the repository is rebuilt and reconnects on next use.
     fn recover_after_panic(&mut self) {
-        if let Source::Mssql(settings) = &self.source {
-            self.repository = MssqlRepository::new(settings.clone())
+        if let Source::Database(settings) = &self.source {
+            self.repository = SqlRepository::new(settings.clone())
                 .ok()
                 .map(|repository| Box::new(repository) as Box<dyn SummonRepository>);
         }
@@ -349,8 +356,8 @@ impl Worker {
         match command {
             Command::Connect(settings) => {
                 self.repository = None;
-                self.source = Source::Mssql(settings.clone());
-                let result = MssqlRepository::new(settings.clone()).and_then(|mut repository| {
+                self.source = Source::Database(settings.clone());
+                let result = SqlRepository::new(settings.clone()).and_then(|mut repository| {
                     let version = repository.test_connection()?;
                     self.repository = Some(Box::new(repository));
                     Ok(version)
@@ -365,7 +372,7 @@ impl Worker {
                 Event::Connected(description)
             }
             Command::TestConnection(settings) => Event::ConnectionTested(
-                MssqlRepository::new(settings.clone())
+                SqlRepository::new(settings.clone())
                     .and_then(|mut repository| repository.test_connection())
                     .map_err(Failure::from),
             ),
@@ -389,9 +396,11 @@ impl Worker {
                 skill_id: *skill_id,
                 result: self.with_repository(|r| r.skill_record(*skill_id)),
             },
-            Command::LoadScaling { summon_id } => {
-                Event::ScalingLoaded(self.with_repository(|r| Ok((r.stat_scaling(*summon_id)?, r.creature_enhance()?))))
-            }
+            Command::LoadScaling { summon_id, earlier_ids } => Event::ScalingLoaded(self.with_repository(|repo| {
+                let current = repo.stat_scaling(*summon_id)?;
+                let earlier = earlier_ids.iter().map(|id| repo.stat_scaling(*id)).collect::<ysm_data::Result<_>>()?;
+                Ok(ScalingData { current, earlier, enhance: repo.creature_enhance()? })
+            })),
             Command::SearchSkills { text, generation } => Event::SkillsFound {
                 generation: *generation,
                 result: self.with_repository(|r| r.search_skills(text, SKILL_SEARCH_LIMIT)),
@@ -567,7 +576,7 @@ mod tests {
             Command::LoadSkillDisplay { ids: vec![1] },
             Command::LoadRandomGroups { ids: vec![2] },
             Command::LoadSkillRecord { skill_id: 3 },
-            Command::LoadScaling { summon_id: 4 },
+            Command::LoadScaling { summon_id: 4, earlier_ids: vec![2, 3] },
             Command::SearchSkills { text: String::new(), generation: 5 },
             Command::NextRandomGroupId { tree, uid: 6 },
             Command::AnalyzeSave { request: CommitRequest::default(), session_tree_ids: vec![] },

@@ -82,6 +82,8 @@ pub struct SkillTreeEntry {
     pub max_skill_lv: i32,
     pub lv: i32,
     pub job_lv: i32,
+    /// Kept when the editor replaces an entire tree in the database.
+    pub jp_ratio: Decimal,
     pub need_skill_id: [i32; 3],
     pub need_skill_lv: [i32; 3],
     pub cenhance_min: i32,
@@ -99,6 +101,7 @@ impl SkillTreeEntry {
             max_skill_lv: 1,
             lv,
             job_lv: 1,
+            jp_ratio: Decimal::ONE,
             need_skill_id: [0; 3],
             need_skill_lv: [0; 3],
             cenhance_min: 0,

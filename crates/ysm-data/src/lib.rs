@@ -1,7 +1,7 @@
 //! Data access for the YSM Summon Editor.
 //!
 //! Everything the editor reads or writes goes through the
-//! [`SummonRepository`] trait, implemented for MSSQL ([`MssqlRepository`])
+//! [`SummonRepository`] trait, implemented for SQL Server and MariaDB ([`SqlRepository`])
 //! and for an in-memory data set ([`InMemoryRepository`]) used by the demo
 //! mode and the tests.
 
@@ -17,6 +17,6 @@ pub mod settings;
 pub use assets::AssetIndex;
 pub use error::{DataError, Result};
 pub use memory::InMemoryRepository;
-pub use mssql::MssqlRepository;
+pub use mssql::{MssqlRepository, SqlRepository};
 pub use repository::SummonRepository;
-pub use settings::{AppSettings, DbSettings, SettingsStore};
+pub use settings::{AppSettings, DatabaseEngine, DbSettings, SettingsStore};

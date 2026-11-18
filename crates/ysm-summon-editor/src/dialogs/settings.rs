@@ -4,7 +4,7 @@
 //! one shared line, help text under the control it belongs to.
 
 use eframe::egui::{self, RichText, Ui};
-use ysm_data::AppSettings;
+use ysm_data::{AppSettings, DatabaseEngine};
 
 use super::DialogContext;
 use crate::action::Action;
@@ -140,6 +140,20 @@ impl SettingsDialog {
         let database = &mut self.working.database;
         let mut edited = false;
 
+        widgets::form_row(ui, "Engine", |ui| {
+            let previous = database.engine;
+            egui::ComboBox::from_id_salt("database_engine").selected_text(previous.label()).show_ui(ui, |ui| {
+                for engine in [DatabaseEngine::SqlServer, DatabaseEngine::MariaDb] {
+                    ui.selectable_value(&mut database.engine, engine, engine.label());
+                }
+            });
+            if database.engine != previous {
+                if self.port_text.trim() == previous.default_port().to_string() {
+                    self.port_text = database.engine.default_port().to_string();
+                }
+                edited = true;
+            }
+        });
         widgets::form_row(ui, "Server", |ui| {
             let field =
                 widgets::sized_text_field(&mut database.server, FIELD_WIDTH).hint_text("Host name or IP address");

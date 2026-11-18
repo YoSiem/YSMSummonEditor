@@ -7,7 +7,7 @@ use std::borrow::Cow;
 
 use rust_decimal::Decimal;
 use tiberius::Query;
-use ysm_core::commit::{CommitRequest, CommitResult, FieldChange, is_sql_identifier, tree_slot_column};
+use ysm_core::commit::{CommitRequest, CommitResult, FieldChange, is_updatable_skill_column, tree_slot_column};
 use ysm_core::model::{STAT_COUNT, SkillTreeEntry, StatBlock};
 use ysm_core::value::{FieldKind, FieldValue};
 
@@ -183,13 +183,9 @@ async fn apply(client: &mut SqlClient, request: &CommitRequest) -> SqlResult<Com
     Ok(result)
 }
 
-pub(super) fn is_updatable_skill_column(change: &FieldChange) -> bool {
-    is_sql_identifier(&change.name) && !change.name.eq_ignore_ascii_case("id") && change.kind.is_editable()
-}
-
 async fn scalar_i32(client: &mut SqlClient, sql: &'static str) -> SqlResult<i32> {
     let row = client.simple_query(sql).await?.into_row().await?;
-    Ok(row.map(|row| Cells::new(row).i32()).unwrap_or(1))
+    Ok(row.map(|row| Cells::new(row.into_iter()).i32()).unwrap_or(1))
 }
 
 async fn insert_tree_entry(client: &mut SqlClient, tree_id: i32, e: &SkillTreeEntry) -> SqlResult<()> {

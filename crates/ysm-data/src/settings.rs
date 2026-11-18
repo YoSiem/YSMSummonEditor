@@ -12,10 +12,36 @@ const APP_FOLDER: &str = "YSMSummonEditor";
 const SETTINGS_FILE: &str = "settings.json";
 pub const DEFAULT_PORT: i32 = 1433;
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DatabaseEngine {
+    #[default]
+    SqlServer,
+    #[serde(rename = "MariaDB")]
+    MariaDb,
+}
+
+impl DatabaseEngine {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::SqlServer => "SQL Server",
+            Self::MariaDb => "MariaDB",
+        }
+    }
+
+    pub fn default_port(self) -> u16 {
+        match self {
+            Self::SqlServer => DEFAULT_PORT as u16,
+            Self::MariaDb => 3306,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase", default)]
 pub struct DbSettings {
+    pub engine: DatabaseEngine,
     pub server: String,
+    #[serde(default)]
     pub port: i32,
     pub database: String,
     pub user_id: String,
@@ -26,6 +52,7 @@ pub struct DbSettings {
 impl Default for DbSettings {
     fn default() -> Self {
         Self {
+            engine: DatabaseEngine::default(),
             server: String::new(),
             port: DEFAULT_PORT,
             database: String::new(),
@@ -43,7 +70,7 @@ impl DbSettings {
 
     /// The configured port, or the default when it is out of range.
     pub fn effective_port(&self) -> u16 {
-        u16::try_from(self.port).ok().filter(|p| *p > 0).unwrap_or(DEFAULT_PORT as u16)
+        u16::try_from(self.port).ok().filter(|p| *p > 0).unwrap_or_else(|| self.engine.default_port())
     }
 
     /// `server,port / database`, without credentials.
@@ -96,7 +123,7 @@ impl SettingsStore {
         let mut settings: AppSettings = serde_json::from_str(json.trim_start_matches('\u{feff}'))
             .map_err(|error| crate::DataError::Invalid(format!("settings file is not valid: {error}")))?;
         if settings.database.port <= 0 {
-            settings.database.port = DEFAULT_PORT;
+            settings.database.port = i32::from(settings.database.engine.default_port());
         }
         Ok(settings)
     }
