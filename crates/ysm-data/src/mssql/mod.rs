@@ -134,8 +134,9 @@ async fn connect(settings: &DbSettings, timeouts: Timeouts) -> Result<SqlClient>
     config.authentication(AuthMethod::sql_server(settings.user_id.trim(), &settings.password));
     config.application_name("YSM Summon Editor");
     config.command_timeout(Some(timeouts.command));
-    // Same as `Encrypt=False` in the original connection string: only the login is encrypted.
-    config.encryption(EncryptionLevel::Off);
+    // True plaintext. `EncryptionLevel::Off` still TLS-wraps the login packet, which
+    // fails on macOS against many LAN SQL Server installs (`connection closed via error`).
+    config.encryption(EncryptionLevel::NotSupported);
     if settings.trust_server_certificate {
         config.trust_cert();
     }
