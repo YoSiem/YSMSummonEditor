@@ -8,6 +8,7 @@
 //! - **Type** has four sizes: 18 title, 15 section, 13 body, 12 caption.
 //! - **Controls** are 32 px high with a 6 px radius; cards and dialogs use 8.
 
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use eframe::egui::{
@@ -233,7 +234,7 @@ fn fonts() -> FontDefinitions {
     egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
 
     let system_font = |file: &str| {
-        let windows = std::env::var_os("WINDIR").map(std::path::PathBuf::from)?;
+        let windows = std::env::var_os("WINDIR").map(PathBuf::from)?;
         std::fs::read(windows.join("Fonts").join(file)).ok()
     };
 
@@ -250,14 +251,42 @@ fn fonts() -> FontDefinitions {
     }
     fonts.families.insert(bold_family(), bold_chain);
 
-    if let Some(bytes) = system_font("malgun.ttf") {
-        fonts.font_data.insert("malgun".into(), Arc::new(FontData::from_owned(bytes)));
+    // Without a CJK face, Hangul/Han from StringResource render as empty boxes.
+    for (name, bytes) in cjk_fallback_fonts() {
+        fonts.font_data.insert(name.clone(), Arc::new(FontData::from_owned(bytes)));
         for family in fonts.families.values_mut() {
-            family.push("malgun".into());
+            family.push(name.clone());
         }
     }
 
     fonts
+}
+
+/// Platform fonts that cover game string glyphs. Windows uses Malgun Gothic;
+/// macOS falls back to AppleGothic / Arial Unicode (egui cannot use `.ttc` collections here).
+fn cjk_fallback_fonts() -> Vec<(String, Vec<u8>)> {
+    let mut loaded = Vec::new();
+
+    if let Some(windows) = std::env::var_os("WINDIR").map(PathBuf::from) {
+        if let Ok(bytes) = std::fs::read(windows.join("Fonts").join("malgun.ttf")) {
+            loaded.push(("malgun".into(), bytes));
+        }
+    }
+
+    let mac_candidates: &[(&str, &Path)] = &[
+        ("apple-gothic", Path::new("/System/Library/Fonts/Supplemental/AppleGothic.ttf")),
+        ("arial-unicode", Path::new("/System/Library/Fonts/Supplemental/Arial Unicode.ttf")),
+        ("arial-unicode", Path::new("/Library/Fonts/Arial Unicode.ttf")),
+    ];
+    for (name, path) in mac_candidates {
+        if loaded.iter().any(|(existing, _)| existing == *name) {
+            continue;
+        }
+        if let Ok(bytes) = std::fs::read(path) {
+            loaded.push(((*name).into(), bytes));
+        }
+    }
+    loaded
 }
 
 /// The window icon, decoded from the embedded `.ico`.
